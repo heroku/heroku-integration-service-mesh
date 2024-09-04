@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 )
 
@@ -42,6 +43,20 @@ func main() {
 		Version:                fmt.Sprintf("%s [os: %s arch: %s]", VERSION, runtime.GOOS, runtime.GOARCH),
 		Action:                 startServer,
 		Flags:                  config.Flags(),
+	}
+
+	// get the commands
+	cmd := exec.Command(os.Args[1], os.Args[2:]...)
+
+	// Set the command's stdout and stderr to os.Stdout and os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// execute the command
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("Error executing command: %v\n", err)
+		os.Exit(1)
 	}
 
 	if err := app.Run(os.Args); err != nil {
