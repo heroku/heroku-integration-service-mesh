@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-var MockPassThroughResponse = mesh.PassThroughResponse{
+var mockPassThroughResponse = mesh.PassThroughResponse{
 	Header: &mesh.RequestHeader{
 		XRequestID:      MockOrgID,
 		XRequestContext: *MockValidXRequestsContext,
@@ -31,7 +31,7 @@ func TestPassThrough(t *testing.T) {
 	handle := handleWithChi(http.MethodPost, "/", routes.PassThrough(), bytes.NewBuffer(body))
 
 	var buff bytes.Buffer
-	err := json.NewEncoder(&buff).Encode(&MockPassThroughResponse)
+	err := json.NewEncoder(&buff).Encode(&mockPassThroughResponse)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +42,37 @@ func TestPassThrough(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 	}
+}
+
+var mockStartRequest = mesh.StartRequest{
+	Command:              "echo Hello, World!",
+	EnvironmentVariables: map[string]string{"TEST_VAR": "test_value"},
+}
+
+func TestStart(t *testing.T) {
+	routes := mesh.NewRoutes()
+
+	// create request body
+	reqBody, err := json.Marshal(mockStartRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handle := handleWithChi(http.MethodPost, "/start", routes.Start(), bytes.NewBuffer(reqBody))
+
+	var buff bytes.Buffer
+	err = json.NewEncoder(&buff).Encode("Hello, World!\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := handle("/start")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
 }
 
 type chiHandler func(path string) *http.Response
