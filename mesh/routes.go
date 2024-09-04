@@ -21,6 +21,11 @@ type PassThroughResponse struct {
 	Body   map[string]string `json:"body"`
 }
 
+type PassResponse struct {
+	Header http.Header       `json:"header"`
+	Body   map[string]string `json:"body"`
+}
+
 type StartRequest struct {
 	Command              string            `json:"command"`
 	EnvironmentVariables map[string]string `json:"environment_variables"`
@@ -30,10 +35,51 @@ func InitializeRoutes(router chi.Router) {
 	routes := NewRoutes()
 	router.Post("/", routes.PassThrough())
 	router.Post("/start", routes.Start())
+	router.HandleFunc("/*", routes.PassThrough())
 }
 
 func NewRoutes() *Routes {
 	return &Routes{http.DefaultTransport}
+}
+
+func (routes *Routes) Pass() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Read request body
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			slog.Error("Error reading body %v", err)
+			http.Error(w, "Error reading body: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		defer r.Body.Close()
+
+		// transform body into a json format
+		var data map[string]string
+		if len(body) > 0 {
+			err = json.Unmarshal(body, &data)
+			if err != nil {
+				http.Error(w, "Error decoding JSON", http.StatusBadRequest)
+				return
+			}
+		}
+
+		response := &PassResponse{
+			Header: r.Header,
+			Body:   data,
+		}
+
+		//convert entire response to JSON
+		resp, err := json.Marshal(response)
+		if err != nil {
+			http.Error(w, "Error creating JSON response", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(resp)
+	}
 }
 
 func (routes *Routes) PassThrough() http.HandlerFunc {
