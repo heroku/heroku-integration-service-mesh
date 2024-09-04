@@ -15,7 +15,7 @@ help: ## show this
 	@grep -E '^[ a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: | fmt vet bin/main
+build: | fmt vet bin/heroku_integration_service_mesh
 	$(info $(M) done)
 
 .PHONY: lint
