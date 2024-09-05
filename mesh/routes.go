@@ -33,9 +33,9 @@ type StartRequest struct {
 
 func InitializeRoutes(router chi.Router) {
 	routes := NewRoutes()
-	router.Post("/", routes.PassThrough())
+	//router.Post("/", routes.PassThrough())
 	router.Post("/start", routes.Start())
-	router.HandleFunc("/*", routes.PassThrough())
+	router.HandleFunc("/*", routes.Pass())
 }
 
 func NewRoutes() *Routes {
