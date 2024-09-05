@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"io"
 	"log/slog"
+	"main/conf"
 	"net/http"
 	"os"
 	"os/exec"
@@ -33,7 +34,6 @@ type StartRequest struct {
 
 func InitializeRoutes(router chi.Router) {
 	routes := NewRoutes()
-	//router.Post("/", routes.PassThrough())
 	router.Post("/start", routes.Start())
 	router.HandleFunc("/*", routes.Pass())
 }
@@ -42,89 +42,44 @@ func NewRoutes() *Routes {
 	return &Routes{http.DefaultTransport}
 }
 
+func getForwardUrl(r *http.Request) (string, error) {
+	appPort := conf.GetConfig().AppPort
+
+	url := fmt.Sprintf("http://127.0.0.1:%s%s", appPort, r.URL.Path)
+	return url, nil
+}
+
 func (routes *Routes) Pass() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Read request body
-		body, err := io.ReadAll(r.Body)
+		forwardUrl, err := getForwardUrl(r)
+		proxyReq, err := http.NewRequest(r.Method, forwardUrl, r.Body)
 		if err != nil {
-			slog.Error("Error reading body %v", err)
-			http.Error(w, "Error reading body: "+err.Error(), http.StatusInternalServerError)
-			return
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
-		defer r.Body.Close()
-
-		// transform body into a json format
-		var data map[string]string
-		if len(body) > 0 {
-			err = json.Unmarshal(body, &data)
-			if err != nil {
-				http.Error(w, "Error decoding JSON", http.StatusBadRequest)
-				return
+		for header, values := range r.Header {
+			for _, value := range values {
+				proxyReq.Header.Set(header, value)
 			}
 		}
 
-		response := &PassResponse{
-			Header: r.Header,
-			Body:   data,
-		}
-
-		//convert entire response to JSON
-		resp, err := json.Marshal(response)
+		client := &http.Client{}
+		resp, err := client.Do(proxyReq)
 		if err != nil {
-			http.Error(w, "Error creating JSON response", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
-	}
-}
-
-func (routes *Routes) PassThrough() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		// Validate the request
-		requestHeader, err := ValidateRequest(r.Header)
-		if err != nil {
-			slog.Error("Invalid request %v", err)
-			http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
-			return
+			http.Error(w, "Error sending proxy request", http.StatusBadGateway)
 		}
 
-		// Read request body
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			slog.Error("Error reading body %v", err)
-			http.Error(w, "Error reading body: "+err.Error(), http.StatusInternalServerError)
-			return
+		defer resp.Body.Close()
+
+		for header, values := range resp.Header {
+			for _, value := range values {
+				w.Header().Add(header, value)
+			}
 		}
 
-		// transform body into a json format
-		var data map[string]string
-		err = json.Unmarshal(body, &data)
-		if err != nil {
-			http.Error(w, "Error decoding JSON", http.StatusBadRequest)
-			return
-		}
-
-		defer r.Body.Close()
-
-		response := &PassThroughResponse{
-			Header: requestHeader,
-			Body:   data,
-		}
-
-		//convert entire response to JSON
-		resp, err := json.Marshal(response)
-		if err != nil {
-			http.Error(w, "Error creating JSON response", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp)
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
 	}
 }
 
