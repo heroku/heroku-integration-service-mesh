@@ -45,22 +45,27 @@ func main() {
 		Flags:                  config.Flags(),
 	}
 
-	// get the commands
-	cmd := exec.Command(os.Args[1], os.Args[2:]...)
+	go func() {
+		if err := app.Run(os.Args); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-	// Set the command's stdout and stderr to os.Stdout and os.Stderr
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if len(os.Args) > 1 {
+		// get the commands
+		cmd := exec.Command(os.Args[1], os.Args[2:]...)
 
-	// execute the command
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error executing command: %v\n", err)
-		os.Exit(1)
-	}
+		// Set the command's stdout and stderr to os.Stdout and os.Stderr
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Start()
 
-	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		// execute the command
+		err = cmd.Wait()
+		if err != nil {
+			fmt.Printf("Error executing command: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 }
