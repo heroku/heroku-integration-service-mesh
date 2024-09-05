@@ -24,7 +24,7 @@ func (c *Config) Flags() []cli.Flag {
 			Usage:       "HTTP Port for routes available on the public internet",
 			EnvVars:     []string{"PORT"},
 			Value:       c.PublicPort,
-			Destination: &c.PublicPort,
+			Destination: &c.PrivatePort,
 		},
 	}
 }
@@ -33,7 +33,7 @@ func main() {
 
 	config := &Config{
 		PublicPort:  "8070",
-		PrivatePort: "8071",
+		PrivatePort: "3000",
 	}
 
 	app := &cli.App{
@@ -89,6 +89,7 @@ func startServer(c *cli.Context) error {
 	)
 
 	router := NewRouter()
+	slog.Info("starting service mesh...")
 	slog.Info("router running", slog.String("port", port))
 	return http.ListenAndServe(":"+port, router)
 }

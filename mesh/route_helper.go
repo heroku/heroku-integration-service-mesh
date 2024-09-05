@@ -1,9 +1,9 @@
 package mesh
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -15,15 +15,25 @@ const (
 	HdrClientContext   = "x-client-context"
 )
 
+type RequestType int
+
+const (
+	PassThrough RequestType = iota
+	AuthRequest
+	DataCloudRequest
+	SalesforceRequest
+)
+
 var (
-	MissingValuesError  = errors.New("x-request-id, x-requests-context, and x-client-context are required")
-	InvalidRequestId    = errors.New("invalid x-request-id")
-	MissingKeyInContext = errors.New("missing key in x-requests-context")
+	MissingValuesError      = errors.New("x-request-id, x-requests-context, and x-client-context are required")
+	InvalidRequestId        = errors.New("invalid x-request-id")
+	MissingKeyInContext     = errors.New("missing key in x-requests-context")
+	InvalidXRequestsContext = errors.New("invalid x-requests-context")
 )
 
 type XRequestsContext struct {
 	ID            string `json:"id"`
-	Author        string `json:"authorization"`
+	Auth          string `json:"auth"`
 	LoginUrl      string `json:"loginUrl"`
 	OrgDomainUrl  string `json:"orgDomainUrl"`
 	OrgID         string `json:"orgId"`
@@ -34,36 +44,46 @@ type XRequestsContext struct {
 }
 
 type RequestHeader struct {
-	XRequestID      string           `json:"x-Request-id"`
+	XRequestID      string           `json:"x-request-id"`
 	XRequestContext XRequestsContext `json:"x-request-context"`
 	XClientContext  string           `json:"x-client-context"`
 }
 
-func ValidateRequest(header http.Header) (*RequestHeader, error) {
+func ValidateSalesforceRequest(header http.Header, requestType RequestType) (*RequestHeader, error) {
 	xRequestID := header.Get(HdrNameRequestID)
 	xRequestsContextString := header.Get(HdrRequestsContext)
 	xClientContext := header.Get(HdrClientContext)
 
-	// check if all values are available and present
-	if xRequestID == "" || xRequestsContextString == "" || xClientContext == "" {
+	if requestType == AuthRequest && !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
 		return nil, MissingValuesError
 	}
 
 	// decode the x-requests-context
+	contextData, err := base64.StdEncoding.DecodeString(xRequestsContextString)
+	if err != nil {
+		return nil, InvalidXRequestsContext
+	}
 	var xRequestsContext XRequestsContext
-	if err := json.Unmarshal([]byte(xRequestsContextString), &xRequestsContext); err != nil {
-		return nil, fmt.Errorf("invalid x-requests-context: %w", err)
+	if err := json.Unmarshal(contextData, &xRequestsContext); err != nil {
+		return nil, InvalidXRequestsContext
 	}
 
-	// ensure all values are present in request context
-	if err := validateRequestContextValues(&xRequestsContext); err != nil {
-		return nil, err
-	}
+	if requestType != AuthRequest {
 
-	// validate that request is coming from an org
-	orgID := xRequestsContext.OrgID
-	if !strings.Contains(xRequestID, orgID) {
-		return nil, InvalidRequestId
+		if !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
+			return nil, MissingValuesError
+		}
+
+		// ensure all values are present in request context
+		if err := validateRequestContextValues(&xRequestsContext); err != nil {
+			return nil, err
+		}
+
+		// validate that request is coming from an org
+		orgID := xRequestsContext.OrgID
+		if !strings.Contains(xRequestID, orgID) {
+			return nil, InvalidRequestId
+		}
 	}
 
 	return &RequestHeader{
@@ -71,6 +91,11 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 		XRequestContext: xRequestsContext,
 		XClientContext:  xClientContext,
 	}, nil
+}
+
+func validatePresence(xRequestID, xRequestContext, xClientContext string) bool {
+
+	return xRequestID == "" || xRequestContext == "" || xClientContext == ""
 }
 
 func validateRequestContextValues(context *XRequestsContext) error {
