@@ -10,22 +10,16 @@ import (
 )
 
 const (
-	HdrNameRequestID   = "x-request-id"
-	HdrRequestsContext = "x-requests-context"
-	HdrClientContext   = "x-client-context"
-)
-
-type RequestType int
-
-const (
-	PassThrough RequestType = iota
-	AuthRequest
-	DataCloudRequest
-	SalesforceRequest
+	HdrNameRequestID          = "x-request-id"
+	HdrRequestsContext        = "x-requests-context"
+	HdrClientContext          = "x-client-context"
+	HdrSignature              = "x-signature"
+	DataActionTargetQueryParm = "dat"
+	OrgIdQueryParm            = "orgId"
 )
 
 var (
-	MissingValuesError      = errors.New("x-request-id, x-requests-context, and x-client-context are required")
+	MissingValuesError      = errors.New("x-request-id, x-requests-context, and x-client-context or x-signature are required")
 	InvalidRequestId        = errors.New("invalid x-request-id")
 	MissingKeyInContext     = errors.New("missing key in x-requests-context")
 	InvalidXRequestsContext = errors.New("invalid x-requests-context")
@@ -44,17 +38,28 @@ type XRequestsContext struct {
 }
 
 type RequestHeader struct {
-	XRequestID      string           `json:"x-request-id"`
-	XRequestContext XRequestsContext `json:"x-request-context"`
-	XClientContext  string           `json:"x-client-context"`
+	XRequestID          string           `json:"x-request-id"`
+	XRequestContext     XRequestsContext `json:"x-request-context"`
+	XClientContext      string           `json:"x-client-context"`
+	XSignature          string           `json:"x-signature"`
+	IsSalesforceRequest bool             `json:"isDataCloudRequest"`
 }
 
-func ValidateSalesforceRequest(header http.Header, requestType RequestType) (*RequestHeader, error) {
+func ValidateRequest(header http.Header) (*RequestHeader, error) {
 	xRequestID := header.Get(HdrNameRequestID)
 	xRequestsContextString := header.Get(HdrRequestsContext)
 	xClientContext := header.Get(HdrClientContext)
+	xSignature := header.Get(HdrSignature)
 
-	if requestType == AuthRequest && !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
+	// first check if the salesforce headers are present, then check if the data-cloud header is present
+	if !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
+		if xSignature != "" {
+			return &RequestHeader{
+				IsSalesforceRequest: false,
+				XSignature:          xSignature,
+			}, nil
+		}
+
 		return nil, MissingValuesError
 	}
 
@@ -63,33 +68,28 @@ func ValidateSalesforceRequest(header http.Header, requestType RequestType) (*Re
 	if err != nil {
 		return nil, InvalidXRequestsContext
 	}
+
 	var xRequestsContext XRequestsContext
 	if err := json.Unmarshal(contextData, &xRequestsContext); err != nil {
 		return nil, InvalidXRequestsContext
 	}
 
-	if requestType != AuthRequest {
+	// ensure all values are present in request context
+	if err := validateRequestContextValues(&xRequestsContext); err != nil {
+		return nil, err
+	}
 
-		if !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
-			return nil, MissingValuesError
-		}
-
-		// ensure all values are present in request context
-		if err := validateRequestContextValues(&xRequestsContext); err != nil {
-			return nil, err
-		}
-
-		// validate that request is coming from an org
-		orgID := xRequestsContext.OrgID
-		if !strings.Contains(xRequestID, orgID) {
-			return nil, InvalidRequestId
-		}
+	// validate that request is coming from an org
+	orgID := xRequestsContext.OrgID
+	if !strings.Contains(xRequestID, orgID) {
+		return nil, InvalidRequestId
 	}
 
 	return &RequestHeader{
-		XRequestID:      xRequestID,
-		XRequestContext: xRequestsContext,
-		XClientContext:  xClientContext,
+		XRequestID:          xRequestID,
+		XRequestContext:     xRequestsContext,
+		XClientContext:      xClientContext,
+		IsSalesforceRequest: true,
 	}, nil
 }
 
