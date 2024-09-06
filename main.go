@@ -5,36 +5,16 @@ import (
 	"github.com/urfave/cli/v2"
 	"log"
 	"log/slog"
+	"main/conf"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 )
 
-type Config struct {
-	PublicPort  string
-	PrivatePort string
-}
-
-func (c *Config) Flags() []cli.Flag {
-	return []cli.Flag{
-		&cli.StringFlag{
-			Name:        "port",
-			Aliases:     []string{"p"},
-			Usage:       "HTTP Port for routes available on the public internet",
-			EnvVars:     []string{"PORT"},
-			Value:       c.PublicPort,
-			Destination: &c.PrivatePort,
-		},
-	}
-}
-
 func main() {
 
-	config := &Config{
-		PublicPort:  "8070",
-		PrivatePort: "3000",
-	}
+	config := conf.GetConfig()
 
 	app := &cli.App{
 		Name:                   "heroku-integration-service-mesh",
@@ -86,10 +66,10 @@ func startServer(c *cli.Context) error {
 		slog.String("http_port", port),
 		slog.String("version", VERSION),
 		slog.String("environment", env),
+		slog.String("app_port", conf.GetConfig().AppPort),
 	)
 
 	router := NewRouter()
-	slog.Info("starting service mesh...")
 	slog.Info("router running", slog.String("port", port))
 	return http.ListenAndServe(":"+port, router)
 }

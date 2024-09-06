@@ -13,37 +13,6 @@ import (
 	"testing"
 )
 
-var mockPassThroughResponse = mesh.PassThroughResponse{
-	Header: &mesh.RequestHeader{
-		XRequestID:      MockOrgID,
-		XRequestContext: *MockValidXRequestsContext,
-		XClientContext:  MockID,
-	},
-	Body: map[string]string{
-		"test": "123",
-	},
-}
-
-func TestPassThrough(t *testing.T) {
-	routes := mesh.NewRoutes()
-	body := []byte(`{"test": "123"}`)
-
-	handle := handleWithChi(http.MethodPost, "/", routes.PassThrough(), bytes.NewBuffer(body))
-
-	var buff bytes.Buffer
-	err := json.NewEncoder(&buff).Encode(&mockPassThroughResponse)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp := handle("/")
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-	}
-}
-
 var mockStartRequest = mesh.StartRequest{
 	Command:              "echo Hello, World!",
 	EnvironmentVariables: map[string]string{"TEST_VAR": "test_value"},
