@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"main/conf"
 	"net/http"
 	"reflect"
 	"strings"
@@ -26,15 +28,13 @@ var (
 )
 
 type XRequestsContext struct {
-	ID            string `json:"id"`
-	Auth          string `json:"auth"`
-	LoginUrl      string `json:"loginUrl"`
-	OrgDomainUrl  string `json:"orgDomainUrl"`
-	OrgID         string `json:"orgId"`
-	Resource      string `json:"resource"`
-	SchemaVersion string `json:"schemaVersion"`
-	Source        string `json:"source"`
-	Type          string `json:"type"`
+	ID           string `json:"id"`
+	Auth         string `json:"auth"`
+	LoginUrl     string `json:"loginUrl"`
+	OrgDomainUrl string `json:"orgDomainUrl"`
+	OrgID        string `json:"orgId"`
+	Resource     string `json:"resource"`
+	Type         string `json:"type"`
 }
 
 type RequestHeader struct {
@@ -50,6 +50,9 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 	xRequestsContextString := header.Get(HdrRequestsContext)
 	xClientContext := header.Get(HdrClientContext)
 	xSignature := header.Get(HdrSignature)
+
+	integrationToken := conf.GetConfig().InvocationToken
+	fmt.Printf("Token: %s\n", integrationToken)
 
 	// first check if the salesforce headers are present, then check if the data-cloud header is present
 	if !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
@@ -69,25 +72,27 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 		return nil, InvalidXRequestsContext
 	}
 
-	var xRequestsContext XRequestsContext
-	if err := json.Unmarshal(contextData, &xRequestsContext); err != nil {
+	var xRequestContext XRequestsContext
+	if err := json.Unmarshal(contextData, &xRequestContext); err != nil {
 		return nil, InvalidXRequestsContext
 	}
 
-	// ensure all values are present in request context
-	if err := validateRequestContextValues(&xRequestsContext); err != nil {
+	fmt.Printf("id: %s, auth: %s, loginUrl: %s, orgId: %s, orgDomainUrl: %s, resource: %s, type: %s\n", xRequestContext.ID, xRequestContext.Auth, xRequestContext.LoginUrl, xRequestContext.OrgDomainUrl, xRequestContext.OrgID, xRequestContext.Resource, xRequestContext.Type)
+
+	//ensure all values are present in request context
+	if err := validateRequestContextValues(&xRequestContext); err != nil {
 		return nil, err
 	}
 
-	// validate that request is coming from an org
-	orgID := xRequestsContext.OrgID
+	//validate that request is coming from an org
+	orgID := xRequestContext.OrgID
 	if !strings.Contains(xRequestID, orgID) {
 		return nil, InvalidRequestId
 	}
 
 	return &RequestHeader{
 		XRequestID:          xRequestID,
-		XRequestContext:     xRequestsContext,
+		XRequestContext:     XRequestsContext{},
 		XClientContext:      xClientContext,
 		IsSalesforceRequest: true,
 	}, nil
@@ -95,14 +100,14 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 
 func validatePresence(xRequestID, xRequestContext, xClientContext string) bool {
 
-	return xRequestID == "" || xRequestContext == "" || xClientContext == ""
+	return xRequestID != "" && xRequestContext != "" && xClientContext != ""
 }
 
 func validateRequestContextValues(context *XRequestsContext) error {
 	v := reflect.ValueOf(*context)
 	for i := 0; i < v.NumField(); i++ {
 		if v.Field(i).IsZero() {
-			return MissingKeyInContext
+			return fmt.Errorf("missing value for x-requests-context: %s", v.Type().Field(i).Name)
 		}
 	}
 	return nil

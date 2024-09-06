@@ -27,8 +27,6 @@ type DataCloudAuthRequestBody struct {
 	Signature        string `json:"signature"`
 }
 
-const HEROKU_INTEGRATION_API_URL = "https://heroku-integration-prod-c06ef9c8a54e.herokuapp.com/addons/e271b891-c53a-4240-a510-e0ffb218e416"
-
 func InitializeRoutes(router chi.Router) {
 	routes := NewRoutes()
 	router.HandleFunc("/*", routes.Pass())
@@ -38,8 +36,7 @@ func NewRoutes() *Routes {
 	return &Routes{http.DefaultTransport}
 }
 
-func getForwardUrl(r *http.Request) (string, error) {
-	appPort := conf.GetConfig().AppPort
+func getForwardUrl(r *http.Request, appPort string) (string, error) {
 
 	url := fmt.Sprintf("http://127.0.0.1:%s%s", appPort, r.URL.Path)
 	return url, nil
@@ -47,11 +44,13 @@ func getForwardUrl(r *http.Request) (string, error) {
 
 func (routes *Routes) Pass() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		config := conf.GetConfig()
 
 		// validate request headers
 		requestHeader, err := ValidateRequest(r.Header)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		// Call the endpoint based on type of request
@@ -63,7 +62,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 				OrgID:        requestHeader.XRequestContext.OrgID,
 			}
 
-			status, err := callSalesforceAddonAuth(authRequestBody)
+			status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
 			if err != nil {
 				http.Error(w, err.Error(), status)
 				return
@@ -83,7 +82,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			}
 
 			// call the addon
-			status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody)
+			status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
 			if err != nil {
 				http.Error(w, err.Error(), status)
 				return
@@ -98,7 +97,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			return
 		}
 
-		forwardUrl, err := getForwardUrl(r)
+		forwardUrl, err := getForwardUrl(r, config.AppPort)
 		proxyReq, err := http.NewRequest(r.Method, forwardUrl, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -129,17 +128,20 @@ func (routes *Routes) Pass() http.HandlerFunc {
 	}
 }
 
-func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody) (int, error) {
+func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody, url, token, requestID string) (int, error) {
 
 	jsonBody, err := json.Marshal(authBody)
 	// call the addon service
-	req, err := http.NewRequest(http.MethodPost, HEROKU_INTEGRATION_API_URL+"/invocations/authentication", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, url+"/invocations/authentication", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Error creating auth request: %v", err)
 		return http.StatusBadRequest, fmt.Errorf("error creating auth request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("REQUEST_ID", requestID)
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -147,17 +149,18 @@ func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody) (int, error) {
 		return http.StatusBadRequest, fmt.Errorf("error invoking authentication %v", err)
 	}
 
+	fmt.Printf("Request Went Through: %s", resp.Status)
+
 	defer resp.Body.Close()
 
 	return resp.StatusCode, nil
 
 }
 
-func callDataCloudAddonAuth(authBody DataCloudAuthRequestBody) (int, error) {
+func callDataCloudAddonAuth(authBody DataCloudAuthRequestBody, u string) (int, error) {
 
 	jsonBody, err := json.Marshal(authBody)
-	// TODO:: Check on productionOrgDC
-	url := HEROKU_INTEGRATION_API_URL + "/datacloud/productionOrgDC/data_action_targets/authenticate"
+	url := u + "/datacloud/" + authBody.OrgID + "/data_action_targets/authenticate"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Error creating auth request: %v", err)

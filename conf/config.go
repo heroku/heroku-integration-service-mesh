@@ -7,9 +7,11 @@ import (
 )
 
 type Config struct {
-	PublicPort  string
-	PrivatePort string
-	AppPort     string
+	PublicPort      string
+	PrivatePort     string
+	AppPort         string
+	InvocationToken string
+	IntegrationUrl  string
 }
 
 func (c *Config) Flags() []cli.Flag {
@@ -28,15 +30,19 @@ func (c *Config) Flags() []cli.Flag {
 var defaultConfig = sync.OnceValue(func() *Config {
 
 	appPort := os.Getenv("APP_PORT")
+	integrationToken := os.Getenv("HEROKU_INTEGRATION_INVOCATIONS_TOKEN")
+	integrationUrl := os.Getenv("HEROKU_INTEGRATION_URL")
 
 	if appPort == "" {
 		appPort = "3000"
 	}
 
 	return &Config{
-		PublicPort:  "8070",
-		PrivatePort: "8071",
-		AppPort:     appPort,
+		PublicPort:      "8070",
+		PrivatePort:     "8071",
+		AppPort:         appPort,
+		InvocationToken: integrationToken,
+		IntegrationUrl:  integrationUrl,
 	}
 })
 

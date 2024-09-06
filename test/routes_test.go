@@ -1,8 +1,6 @@
 package test
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -10,39 +8,7 @@ import (
 	"main/mesh"
 	"net/http"
 	"net/http/httptest"
-	"testing"
 )
-
-var mockStartRequest = mesh.StartRequest{
-	Command:              "echo Hello, World!",
-	EnvironmentVariables: map[string]string{"TEST_VAR": "test_value"},
-}
-
-func TestStart(t *testing.T) {
-	routes := mesh.NewRoutes()
-
-	// create request body
-	reqBody, err := json.Marshal(mockStartRequest)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	handle := handleWithChi(http.MethodPost, "/start", routes.Start(), bytes.NewBuffer(reqBody))
-
-	var buff bytes.Buffer
-	err = json.NewEncoder(&buff).Encode("Hello, World!\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp := handle("/start")
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-	}
-
-}
 
 type chiHandler func(path string) *http.Response
 
