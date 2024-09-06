@@ -13,15 +13,13 @@ import (
 var MockID = uuid.New().String()
 var MockOrgID = uuid.New().String()
 var MockValidXRequestsContext = &mesh.XRequestsContext{
-	ID:            MockID,
-	Author:        "auth",
-	LoginUrl:      "http://login.salesforce.com",
-	OrgDomainUrl:  "http://org.salesforce.com",
-	OrgID:         MockOrgID,
-	Resource:      "resource",
-	SchemaVersion: "1.0",
-	Source:        "src",
-	Type:          "type",
+	ID:           MockID,
+	Auth:         "auth",
+	LoginUrl:     "http://login.salesforce.com",
+	OrgDomainUrl: "http://org.salesforce.com",
+	OrgID:        MockOrgID,
+	Resource:     "resource",
+	Type:         "type",
 }
 
 func MockXRequestsContextString() string {
@@ -64,14 +62,12 @@ func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
 
 func TestValidateRequestFailureMissingContextKey(t *testing.T) {
 	invalidXRequestsContext := &mesh.XRequestsContext{
-		ID:            uuid.New().String(),
-		Author:        "auth",
-		LoginUrl:      "http://login.salesforce.com",
-		OrgDomainUrl:  "http://org.salesforce.com",
-		OrgID:         uuid.New().String(),
-		Resource:      "resource",
-		SchemaVersion: "1.0",
-		Source:        "src",
+		ID:           uuid.New().String(),
+		Auth:         "auth",
+		LoginUrl:     "http://login.salesforce.com",
+		OrgDomainUrl: "http://org.salesforce.com",
+		OrgID:        uuid.New().String(),
+		Resource:     "resource",
 	}
 
 	invalidXRequestsContextJSON, err := json.Marshal(invalidXRequestsContext)
