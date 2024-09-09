@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"main/conf"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"strings"
@@ -13,7 +13,7 @@ import (
 
 const (
 	HdrNameRequestID          = "x-request-id"
-	HdrRequestsContext        = "x-requests-context"
+	HdrRequestsContext        = "x-request-context"
 	HdrClientContext          = "x-client-context"
 	HdrSignature              = "x-signature"
 	DataActionTargetQueryParm = "dat"
@@ -51,9 +51,6 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 	xClientContext := header.Get(HdrClientContext)
 	xSignature := header.Get(HdrSignature)
 
-	integrationToken := conf.GetConfig().InvocationToken
-	fmt.Printf("Token: %s\n", integrationToken)
-
 	// first check if the salesforce headers are present, then check if the data-cloud header is present
 	if !validatePresence(xRequestID, xRequestsContextString, xClientContext) {
 		if xSignature != "" {
@@ -63,30 +60,33 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 			}, nil
 		}
 
+		slog.Error("Validation error: x-request-id, x-contexts-request, and x-client-context or x-signature are required")
 		return nil, MissingValuesError
 	}
 
 	// decode the x-requests-context
 	contextData, err := base64.StdEncoding.DecodeString(xRequestsContextString)
 	if err != nil {
+		slog.Error("Unable to decode x-requests-context")
 		return nil, InvalidXRequestsContext
 	}
 
 	var xRequestContext XRequestsContext
 	if err := json.Unmarshal(contextData, &xRequestContext); err != nil {
+		slog.Error("Unable to unmarshal  x-requests-context")
 		return nil, InvalidXRequestsContext
 	}
 
-	fmt.Printf("id: %s, auth: %s, loginUrl: %s, orgId: %s, orgDomainUrl: %s, resource: %s, type: %s\n", xRequestContext.ID, xRequestContext.Auth, xRequestContext.LoginUrl, xRequestContext.OrgDomainUrl, xRequestContext.OrgID, xRequestContext.Resource, xRequestContext.Type)
-
 	//ensure all values are present in request context
 	if err := validateRequestContextValues(&xRequestContext); err != nil {
+		slog.Error("Unable to validate x-requests-context: " + err.Error())
 		return nil, err
 	}
 
 	//validate that request is coming from an org
 	orgID := xRequestContext.OrgID
 	if !strings.Contains(xRequestID, orgID) {
+		slog.Error("Missing org id in x-request-id")
 		return nil, InvalidRequestId
 	}
 
