@@ -47,6 +47,19 @@ func TestValidateRequestSuccess(t *testing.T) {
 	}
 }
 
+func TestInvalidRequestID(t *testing.T) {
+
+	header := http.Header{}
+	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.ID)
+	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
+	header.Set(mesh.HdrClientContext, MockValidXRequestsContext.ID)
+
+	_, err := mesh.ValidateRequest(header)
+	if !errors.Is(err, mesh.InvalidRequestId) {
+		t.Errorf("Expected '%v' got %v", mesh.InvalidRequestId, err)
+	}
+}
+
 func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
 	header := http.Header{}
 	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)

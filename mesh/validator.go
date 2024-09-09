@@ -23,7 +23,6 @@ const (
 var (
 	MissingValuesError      = errors.New("x-request-id, x-requests-context, and x-client-context or x-signature are required")
 	InvalidRequestId        = errors.New("invalid x-request-id")
-	MissingKeyInContext     = errors.New("missing key in x-requests-context")
 	InvalidXRequestsContext = errors.New("invalid x-requests-context")
 )
 
@@ -85,7 +84,8 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 
 	//validate that request is coming from an org
 	orgID := xRequestContext.OrgID
-	if !strings.Contains(xRequestID, orgID) {
+	truncatedOrgID := orgID[:len(orgID)-3]
+	if !strings.Contains(xRequestID, truncatedOrgID) {
 		slog.Error("Missing org id in x-request-id")
 		return nil, InvalidRequestId
 	}
