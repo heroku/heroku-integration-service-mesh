@@ -31,7 +31,7 @@ var defaultConfig = sync.OnceValue(func() *Config {
 
 	appPort := os.Getenv("APP_PORT")
 	integrationToken := os.Getenv("HEROKU_INTEGRATION_INVOCATIONS_TOKEN")
-	integrationUrl := os.Getenv("HEROKU_INTEGRATION_URL")
+	integrationUrl := os.Getenv("HEROKU_INTEGRATION_API_URL")
 
 	if appPort == "" {
 		appPort = "3000"
