@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"main/conf"
 	"net/http"
+	"strconv"
 )
 
 type Routes struct {
@@ -49,7 +50,8 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		// validate request headers
 		requestHeader, err := ValidateRequest(r.Header)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			slog.Error("Error with validation: " + err.Error())
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -64,6 +66,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 
 			status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
 			if err != nil {
+				slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
 				http.Error(w, err.Error(), status)
 				return
 			}
@@ -84,6 +87,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			// call the addon
 			status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
 			if err != nil {
+				slog.Error("Error Authorizing Datacloud request from add on: " + err.Error())
 				http.Error(w, err.Error(), status)
 				return
 			}
@@ -92,6 +96,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		}
 
 		if finalStatus != http.StatusOK {
+			slog.Error("Non-200 Error: " + strconv.Itoa(finalStatus))
 			http.Error(w, http.StatusText(finalStatus), finalStatus)
 			w.WriteHeader(finalStatus)
 			return
@@ -100,9 +105,11 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		forwardUrl, err := getForwardUrl(r, config.AppPort)
 		proxyReq, err := http.NewRequest(r.Method, forwardUrl, r.Body)
 		if err != nil {
+			slog.Error("Error creating request: " + err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
+		// adding the same headers for the request
 		for header, values := range r.Header {
 			for _, value := range values {
 				proxyReq.Header.Set(header, value)
