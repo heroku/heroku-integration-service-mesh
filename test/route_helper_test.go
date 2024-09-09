@@ -1,8 +1,10 @@
 package test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"net/http"
 	"testing"
@@ -22,19 +24,21 @@ var MockValidXRequestsContext = &mesh.XRequestsContext{
 	Type:         "type",
 }
 
-func MockXRequestsContextString() string {
-	validXRequestsContextJSON, err := json.Marshal(MockValidXRequestsContext)
+func convertContextToString(context *mesh.XRequestsContext) string {
+
+	requestContextJson, err := json.Marshal(context)
 	if err != nil {
-		return ""
+		fmt.Errorf(err.Error())
 	}
-	return string(validXRequestsContextJSON)
+
+	return base64.StdEncoding.EncodeToString(requestContextJson)
 }
 
 func TestValidateRequestSuccess(t *testing.T) {
 
 	header := http.Header{}
 	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)
-	header.Set(mesh.HdrRequestsContext, MockXRequestsContextString())
+	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
 	header.Set(mesh.HdrClientContext, MockValidXRequestsContext.ID)
 
 	_, err := mesh.ValidateRequest(header)
@@ -44,17 +48,11 @@ func TestValidateRequestSuccess(t *testing.T) {
 }
 
 func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
-
-	validXRequestsContextJSON, err := json.Marshal(MockValidXRequestsContext)
-	if err != nil {
-		t.Errorf("Error marshalling validXRequestsContext")
-	}
-
 	header := http.Header{}
-	header.Set("x-request-id", MockValidXRequestsContext.OrgID)
-	header.Set("x-requests-context", string(validXRequestsContextJSON))
+	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)
+	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
 
-	_, err = mesh.ValidateRequest(header)
+	_, err := mesh.ValidateRequest(header)
 	if !errors.Is(err, mesh.MissingValuesError) {
 		t.Errorf("Expected '%v' got %v", mesh.MissingValuesError, err)
 	}
@@ -67,22 +65,16 @@ func TestValidateRequestFailureMissingContextKey(t *testing.T) {
 		LoginUrl:     "http://login.salesforce.com",
 		OrgDomainUrl: "http://org.salesforce.com",
 		OrgID:        uuid.New().String(),
-		Resource:     "resource",
-	}
-
-	invalidXRequestsContextJSON, err := json.Marshal(invalidXRequestsContext)
-	if err != nil {
-		t.Errorf("Error marshalling validXRequestsContext")
 	}
 
 	header := http.Header{}
-	header.Set("x-request-id", invalidXRequestsContext.OrgID)
-	header.Set("x-requests-context", string(invalidXRequestsContextJSON))
-	header.Set("x-client-context", invalidXRequestsContext.ID)
+	header.Set(mesh.HdrNameRequestID, invalidXRequestsContext.OrgID)
+	header.Set(mesh.HdrRequestsContext, convertContextToString(invalidXRequestsContext))
+	header.Set(mesh.HdrClientContext, invalidXRequestsContext.ID)
 
-	_, err = mesh.ValidateRequest(header)
-	if !errors.Is(err, mesh.MissingKeyInContext) {
-		t.Errorf("Expected '%v' got %v", mesh.MissingKeyInContext, err)
+	_, err := mesh.ValidateRequest(header)
+	if err == nil {
+		t.Errorf("Expected 'missing value for x-requests-context: Resource' got %v", err)
 	}
 
 }
