@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"main/conf"
 	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -47,6 +48,9 @@ func (routes *Routes) Pass() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		config := conf.GetConfig()
 
+		should_auth_disable := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_AUTH_DISABLE")
+		run_auth, err := strconv.ParseBool(should_auth_disable)
+
 		// validate request headers
 		requestHeader, err := ValidateRequest(r.Header)
 		if err != nil {
@@ -55,51 +59,54 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			return
 		}
 
-		// Call the endpoint based on type of request
-		var finalStatus int
-		if requestHeader.IsSalesforceRequest {
-			authRequestBody := SalesforceAuthRequestBody{
-				OrgDomainUrl: requestHeader.XRequestContext.OrgDomainUrl,
-				CoreJWTToken: requestHeader.XRequestContext.Auth,
-				OrgID:        requestHeader.XRequestContext.OrgID,
+		if !run_auth {
+			// Call the endpoint based on type of request
+			var finalStatus int
+			if requestHeader.IsSalesforceRequest {
+				authRequestBody := SalesforceAuthRequestBody{
+					OrgDomainUrl: requestHeader.XRequestContext.OrgDomainUrl,
+					CoreJWTToken: requestHeader.XRequestContext.Auth,
+					OrgID:        requestHeader.XRequestContext.OrgID,
+				}
+
+				status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
+				if err != nil {
+					slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
+					http.Error(w, err.Error(), status)
+					return
+				}
+				finalStatus = status
+
+			} else {
+
+				// Get data from query params
+				queryParams := r.URL.Query()
+
+				// Build DataCloudAuth Request Body
+				dataCloudAuthRequestBody := DataCloudAuthRequestBody{
+					DataActionTarget: queryParams.Get(DataActionTargetQueryParm),
+					OrgID:            queryParams.Get(OrgIdQueryParm),
+					Signature:        requestHeader.XSignature,
+				}
+
+				// call the addon
+				status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
+				if err != nil {
+					slog.Error("Error Authorizing Datacloud request from add on: " + err.Error())
+					http.Error(w, err.Error(), status)
+					return
+				}
+				finalStatus = status
+
 			}
 
-			status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
-			if err != nil {
-				slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
-				http.Error(w, err.Error(), status)
+			if finalStatus != http.StatusOK {
+				slog.Error("Non-200 Error: " + strconv.Itoa(finalStatus))
+				http.Error(w, http.StatusText(finalStatus), finalStatus)
+				w.WriteHeader(finalStatus)
 				return
 			}
-			finalStatus = status
 
-		} else {
-
-			// Get data from query params
-			queryParams := r.URL.Query()
-
-			// Build DataCloudAuth Request Body
-			dataCloudAuthRequestBody := DataCloudAuthRequestBody{
-				DataActionTarget: queryParams.Get(DataActionTargetQueryParm),
-				OrgID:            queryParams.Get(OrgIdQueryParm),
-				Signature:        requestHeader.XSignature,
-			}
-
-			// call the addon
-			status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
-			if err != nil {
-				slog.Error("Error Authorizing Datacloud request from add on: " + err.Error())
-				http.Error(w, err.Error(), status)
-				return
-			}
-			finalStatus = status
-
-		}
-
-		if finalStatus != http.StatusOK {
-			slog.Error("Non-200 Error: " + strconv.Itoa(finalStatus))
-			http.Error(w, http.StatusText(finalStatus), finalStatus)
-			w.WriteHeader(finalStatus)
-			return
 		}
 
 		forwardUrl, err := getForwardUrl(r, config.AppPort)
