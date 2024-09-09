@@ -25,7 +25,7 @@ func handleWithChi(method, path string, h http.HandlerFunc, body io.Reader) chiH
 	return func(path string) *http.Response {
 		req := httptest.NewRequest(method, fmt.Sprintf("http://localhost%s", path), body)
 		req.Header.Set(mesh.HdrNameRequestID, MockOrgID)
-		req.Header.Set(mesh.HdrRequestsContext, MockXRequestsContextString())
+		req.Header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
 		req.Header.Set(mesh.HdrClientContext, MockID)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
