@@ -72,7 +72,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 				status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
 				if err != nil {
 					slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
-					http.Error(w, err.Error(), status)
+					http.Error(w, err.Error(), http.StatusUnauthorized)
 					return
 				}
 				finalStatus = status
@@ -126,6 +126,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		client := &http.Client{}
 		resp, err := client.Do(proxyReq)
 		if err != nil {
+			slog.Error("Error sending proxy request: " + err.Error())
 			http.Error(w, "Error sending proxy request", http.StatusBadGateway)
 		}
 
@@ -146,6 +147,8 @@ func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody, url, token, req
 
 	jsonBody, err := json.Marshal(authBody)
 	// call the addon service
+	slog.Debug("Calling Salesforce addon: " + url)
+	slog.Debug("Using Token: " + token)
 	req, err := http.NewRequest(http.MethodPost, url+"/invocations/authentication", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Error creating auth request: %v", err)
