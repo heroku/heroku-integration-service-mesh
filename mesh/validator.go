@@ -92,7 +92,7 @@ func ValidateRequest(header http.Header) (*RequestHeader, error) {
 
 	return &RequestHeader{
 		XRequestID:          xRequestID,
-		XRequestContext:     XRequestsContext{},
+		XRequestContext:     xRequestContext,
 		XClientContext:      xClientContext,
 		IsSalesforceRequest: true,
 	}, nil
