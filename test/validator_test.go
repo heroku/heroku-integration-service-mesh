@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"net/http"
 	"testing"
@@ -28,7 +27,7 @@ func convertContextToString(context *mesh.XRequestsContext) string {
 
 	requestContextJson, err := json.Marshal(context)
 	if err != nil {
-		fmt.Errorf(err.Error())
+		panic(err)
 	}
 
 	return base64.StdEncoding.EncodeToString(requestContextJson)
@@ -41,9 +40,13 @@ func TestValidateRequestSuccess(t *testing.T) {
 	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
 	header.Set(mesh.HdrClientContext, MockValidXRequestsContext.ID)
 
-	_, err := mesh.ValidateRequest(header)
+	validateRequestHeader, err := mesh.ValidateRequest(header)
 	if err != nil {
 		t.Error(err)
+	}
+
+	if !validateRequestHeader.IsSalesforceRequest {
+		t.Error("IsSalesforceRequest should be true")
 	}
 }
 
@@ -61,6 +64,7 @@ func TestInvalidRequestID(t *testing.T) {
 }
 
 func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
+
 	header := http.Header{}
 	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)
 	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
@@ -72,6 +76,7 @@ func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
 }
 
 func TestValidateRequestFailureMissingContextKey(t *testing.T) {
+
 	invalidXRequestsContext := &mesh.XRequestsContext{
 		ID:           uuid.New().String(),
 		Auth:         "auth",
@@ -90,4 +95,19 @@ func TestValidateRequestFailureMissingContextKey(t *testing.T) {
 		t.Errorf("Expected 'missing value for x-requests-context: Resource' got %v", err)
 	}
 
+}
+
+func TestIsDataCloudRequest(t *testing.T) {
+	header := http.Header{}
+	header.Set(mesh.HdrSignature, uuid.New().String())
+
+	validateRequestHeader, err := mesh.ValidateRequest(header)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if validateRequestHeader.IsSalesforceRequest {
+		t.Error("IsSalesforceRequest should be false")
+	}
 }
