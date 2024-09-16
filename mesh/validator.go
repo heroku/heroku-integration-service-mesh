@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	HdrNameRequestID          = "x-request-id"
-	HdrRequestsContext        = "x-request-context"
-	HdrClientContext          = "x-client-context"
-	HdrSignature              = "x-signature"
-	DataActionTargetQueryParm = "dat"
-	OrgIdQueryParm            = "orgId"
+	HdrNameRequestID   = "x-request-id"
+	HdrRequestsContext = "x-request-context"
+	HdrClientContext   = "x-client-context"
+	HdrSignature       = "x-signature"
+	OrgIdQueryParm     = "orgId"
+	ApiNameQueryParam  = "apiName"
 )
 
 var (

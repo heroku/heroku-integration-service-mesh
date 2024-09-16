@@ -24,9 +24,10 @@ type SalesforceAuthRequestBody struct {
 }
 
 type DataCloudAuthRequestBody struct {
-	DataActionTarget string `json:"data_action_target"`
-	OrgID            string `json:"org_id"`
-	Signature        string `json:"signature"`
+	ApiName   string                 `json:"api_name"`
+	OrgID     string                 `json:"org_id"`
+	Signature string                 `json:"signature"`
+	Payload   map[string]interface{} `json:"payload"`
 }
 
 func InitializeRoutes(router chi.Router) {
@@ -47,7 +48,6 @@ func getForwardUrl(r *http.Request, appPort string) (string, error) {
 func (routes *Routes) Pass() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		config := conf.GetConfig()
-
 		should_auth_disable := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_AUTH_DISABLE")
 		run_auth, err := strconv.ParseBool(should_auth_disable)
 
@@ -63,6 +63,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			// Call the endpoint based on type of request
 			var finalStatus int
 			if requestHeader.IsSalesforceRequest {
+				slog.Debug("Building salesforce auth request for add-on")
 				authRequestBody := SalesforceAuthRequestBody{
 					OrgDomainUrl: requestHeader.XRequestContext.OrgDomainUrl,
 					CoreJWTToken: requestHeader.XRequestContext.Auth,
@@ -75,18 +76,29 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					http.Error(w, err.Error(), http.StatusUnauthorized)
 					return
 				}
+				slog.Info("Salesforce request has been validated from add-on")
 				finalStatus = status
 
-			} else {
+			} else { // This means that it is a data cloud request
 
 				// Get data from query params
 				queryParams := r.URL.Query()
 
+				// Get the request body from the initial request
+				var bodyData map[string]interface{}
+				err := json.NewDecoder(r.Body).Decode(&bodyData)
+				if err != nil {
+					slog.Error("Error parsing body from the request: " + err.Error())
+					http.Error(w, err.Error(), http.StatusUnauthorized)
+					return
+				}
+
 				// Build DataCloudAuth Request Body
 				dataCloudAuthRequestBody := DataCloudAuthRequestBody{
-					DataActionTarget: queryParams.Get(DataActionTargetQueryParm),
-					OrgID:            queryParams.Get(OrgIdQueryParm),
-					Signature:        requestHeader.XSignature,
+					ApiName:   queryParams.Get(ApiNameQueryParam),
+					OrgID:     queryParams.Get(OrgIdQueryParm),
+					Signature: requestHeader.XSignature,
+					Payload:   bodyData,
 				}
 
 				// call the addon
@@ -97,6 +109,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					return
 				}
 				finalStatus = status
+				slog.Info("Datacloud request has been validated from add-on")
 
 			}
 
@@ -108,7 +121,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			}
 
 		}
-
+		slog.Info("Forwarding the request")
 		forwardUrl, err := getForwardUrl(r, config.AppPort)
 		proxyReq, err := http.NewRequest(r.Method, forwardUrl, r.Body)
 		if err != nil {
@@ -177,7 +190,7 @@ func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody, url, token, req
 func callDataCloudAddonAuth(authBody DataCloudAuthRequestBody, u string) (int, error) {
 
 	jsonBody, err := json.Marshal(authBody)
-	url := u + "/datacloud/" + authBody.OrgID + "/data_action_targets/authenticate"
+	url := u + "connections/datacloud/authenticate"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Error creating auth request: %v", err)
