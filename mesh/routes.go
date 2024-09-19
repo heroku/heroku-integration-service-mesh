@@ -70,13 +70,15 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					OrgID:        requestHeader.XRequestContext.OrgID,
 				}
 
+				slog.Info("Auth: " + requestHeader.XRequestContext.Auth)
+
 				status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
 				if err != nil {
 					slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
 					http.Error(w, err.Error(), http.StatusUnauthorized)
 					return
 				}
-				slog.Info("Salesforce request has been validated from add-on")
+				slog.Info("Response has been received from add-on about Salesforce auth request")
 				finalStatus = status
 
 			} else { // This means that it is a data cloud request
@@ -109,12 +111,12 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					return
 				}
 				finalStatus = status
-				slog.Info("Datacloud request has been validated from add-on")
+				slog.Info("Datacloud request has been received from add-on about Datacloud request")
 
 			}
 
 			if finalStatus != http.StatusOK {
-				slog.Error("Non-200 Error: " + strconv.Itoa(finalStatus))
+				slog.Error("Non-200 response from add-on: " + strconv.Itoa(finalStatus))
 				http.Error(w, http.StatusText(finalStatus), finalStatus)
 				w.WriteHeader(finalStatus)
 				return
