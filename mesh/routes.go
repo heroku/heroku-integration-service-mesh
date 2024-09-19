@@ -91,7 +91,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 				err := json.NewDecoder(r.Body).Decode(&bodyData)
 				if err != nil {
 					slog.Error("Error parsing body from the request: " + err.Error())
-					http.Error(w, err.Error(), http.StatusUnauthorized)
+					http.Error(w, err.Error(), http.StatusForbidden)
 					return
 				}
 
@@ -110,8 +110,11 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					http.Error(w, err.Error(), status)
 					return
 				}
-				finalStatus = status
 				slog.Info("Datacloud request has been received from add-on about Datacloud request")
+				if status != http.StatusOK {
+					status = http.StatusForbidden
+				}
+				finalStatus = status
 
 			}
 
