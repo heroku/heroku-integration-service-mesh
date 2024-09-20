@@ -78,7 +78,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					http.Error(w, err.Error(), http.StatusUnauthorized)
 					return
 				}
-				slog.Info("Response has been received from add-on about Salesforce auth request")
+				slog.Info("Salesforce request has been evaluated from add-on")
 				finalStatus = status
 
 			} else { // This means that it is a data cloud request
@@ -106,11 +106,11 @@ func (routes *Routes) Pass() http.HandlerFunc {
 				// call the addon
 				status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
 				if err != nil {
-					slog.Error("Error Authorizing Datacloud request from add on: " + err.Error())
+					slog.Error("Error sending Datacloud request tp add on: " + err.Error())
 					http.Error(w, err.Error(), status)
 					return
 				}
-				slog.Info("Datacloud request has been received from add-on about Datacloud request")
+				slog.Info("Datacloud request has been evaluated from add-on")
 				if status != http.StatusOK {
 					status = http.StatusForbidden
 				}
@@ -119,7 +119,7 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			}
 
 			if finalStatus != http.StatusOK {
-				slog.Error("Non-200 response from add-on: " + strconv.Itoa(finalStatus))
+				slog.Error("Authentication failed from add-on: " + strconv.Itoa(finalStatus))
 				http.Error(w, http.StatusText(finalStatus), finalStatus)
 				w.WriteHeader(finalStatus)
 				return
@@ -195,7 +195,7 @@ func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody, url, token, req
 func callDataCloudAddonAuth(authBody DataCloudAuthRequestBody, u string) (int, error) {
 
 	jsonBody, err := json.Marshal(authBody)
-	url := u + "connections/datacloud/authenticate"
+	url := u + "/connections/datacloud/authenticate"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		slog.Error("Error creating auth request: %v", err)
