@@ -75,25 +75,24 @@ type RequestHeader struct {
 	IsSalesforceRequest bool            `json:"isDataActionTargetRequest"`
 }
 
-/*
-*
-  - Validate the request headers.
-    *
-  - Salesforce request required headers:
-  - x-request-id
-  - x-request-context
-  - x-client-context
-    *
-  - Data Action Target request required headers:
-  - x-signature
-    *
-  - @param requestID
-  - @param header
-  - @return
-  - @throws MeshValidationException
-  - @throws InvalidRequest
-  - @throws MalformedRequest
-*/
+/**
+ * Validate the request headers based on type - Salesforce or Data Action Target.
+ *
+ * Request Salesforce request headers:
+ *   - x-request-id
+ *   - x-request-context
+ *   - x-client-context
+ *
+ * Required Data Action Target request headers:
+ *   - x-signature
+ *
+ * @param requestID
+ * @param header
+ * @return
+ * @throws MeshValidationException
+ * @throws InvalidRequest
+ * @throws MalformedRequest
+ */
 func ValidateRequest(requestID string, header http.Header) (string, *RequestHeader, error) {
 	xRequestID := header.Get(HdrNameRequestID)
 
@@ -147,13 +146,13 @@ func ValidateRequest(requestID string, header http.Header) (string, *RequestHead
 		return requestID, nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
-	//ensure all values are present in request context
+	// ensure all values are present in request context
 	if err := validateRequestContextValues(requestID, &XRequestContext); err != nil {
 		logError(requestID, "Invalid request: unable to validate Salesforce x-request-context header: "+err.Error())
 		return requestID, nil, err
 	}
 
-	//validate that request is coming from an org
+	// validate that request is coming from an org
 	orgID := XRequestContext.OrgID
 	// TODO: Adjust once both requestId and orgId are both 18-char
 	truncatedOrgID := orgID[:len(orgID)-3]

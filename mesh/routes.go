@@ -47,6 +47,18 @@ func getForwardUrl(r *http.Request, appPort string) (string, error) {
 	return url, nil
 }
 
+/**
+ * Intercepts Heroku Integration app API requests validating and authenticating
+ * each request based on type - Salesforce or Data Action Target.
+ *
+ * For validation rules, see ValidateRequest.
+ *
+ * Requests are authenticated with the app's associated Heroku Integration add-on
+ * resource.
+ *
+ * If validation and authentication are successful, the mesh forwards the request
+ * to the target app API.
+ */
 func (routes *Routes) Pass() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()

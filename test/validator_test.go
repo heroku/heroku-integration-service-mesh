@@ -10,10 +10,9 @@ import (
 	mesh "main/mesh"
 )
 
-
 var MockOrgID18 = "001Ws00003GGHVDIA5"
 var MockUUID = uuid.New().String()
-var MockRequestID =  MockOrgID18[:len(MockOrgID18)-3] + "-" + MockUUID
+var MockRequestID = MockOrgID18[:len(MockOrgID18)-3] + "-" + MockUUID
 var MockValidXRequestContext = &mesh.XRequestContext{
 	ID:           MockRequestID,
 	Auth:         "auth",
