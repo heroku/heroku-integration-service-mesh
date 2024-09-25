@@ -2,4 +2,4 @@ package main
 
 // VERSION is the app-global version string, which should be substituted with a
 // real value during build.
-var VERSION = "v0.12.0"
+var VERSION = "v0.12.1"
