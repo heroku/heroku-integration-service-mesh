@@ -26,7 +26,8 @@ lint: ## run go linters
 
 .PHONY: test
 test: ## run all of the test cases
-	$(Q) go test -cover ./...
+	$(Q) go test ./... -coverpkg=./... -coverprofile ./coverage.out
+	go tool cover -func ./coverage.out
 
 .PHONY: fmt
 fmt: ## run go fmt on all source files
