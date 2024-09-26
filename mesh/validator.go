@@ -41,7 +41,8 @@ func NewInvalidRequest(message string) *InvalidRequest {
 	}
 }
 
-// Return when request is structured correctly, but header content is incorrect - 400 Bad Request
+// Return when request is structured correctly - likely a valid Salesforce/Data Cloud request,
+// but headers or header content is incorrect - 400 Bad Request
 func NewMalformedRequest(message string) *InvalidRequest {
 	return &InvalidRequest{
 		StatusCode: http.StatusBadRequest,
@@ -67,24 +68,16 @@ type RequestHeader struct {
 	IsSalesforceRequest bool            `json:"isDataActionTargetRequest"`
 }
 
-/**
- * Validate the request headers based on type - Salesforce or Data Action Target.
- *
- * Request Salesforce request headers:
- *   - x-request-id
- *   - x-request-context
- *   - x-client-context
- *
- * Required Data Action Target request headers:
- *   - x-signature
- *
- * @param requestID
- * @param header
- * @return RequestHeader, error
- * @throws MeshValidationException
- * @throws InvalidRequest
- * @throws MalformedRequest
- */
+// Validate the request headers based on type - Salesforce or Data Action Target.
+//
+// Request Salesforce request headers:
+//   - x-request-id
+//   - x-request-context
+//   - x-client-context
+//
+// Required Data Action Target request headers:
+//   - x-request-id
+//   - x-signature
 func ValidateRequest(requestID string, headers http.Header) (*RequestHeader, error) {
 	logInfo(requestID, "Validating request...")
 
@@ -116,11 +109,11 @@ func ValidateRequest(requestID string, headers http.Header) (*RequestHeader, err
 			}
 
 			// NOT a Salesforce OR a Data Action Target request
-			logError(requestID, "Invalid request!  Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
-			logError(requestID, "Invalid request!  Invalid Data Action Target x-signature header")
+			logError(requestID, "Invalid request! Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
+			logError(requestID, "Invalid request! Invalid Data Action Target x-signature header")
 		} else {
 			// Found some, but NOT ALL Salesforce headers
-			logError(requestID, "Invalid request!  Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
+			logError(requestID, "Invalid request! Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
 			return nil, NewMalformedRequest("Invalid request")
 		}
 
@@ -131,19 +124,19 @@ func ValidateRequest(requestID string, headers http.Header) (*RequestHeader, err
 	// 1. Decode the x-request-context
 	contextData, err := base64.StdEncoding.DecodeString(XRequestContextString)
 	if err != nil {
-		logError(requestID, "Invalid request!  Unable to decode Salesforce x-request-context header")
+		logError(requestID, "Invalid request! Unable to decode Salesforce x-request-context header")
 		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
 	var XRequestContext XRequestContext
 	if err := json.Unmarshal(contextData, &XRequestContext); err != nil {
-		logError(requestID, "Invalid request!  Unable to unmarshal Salesforce x-request-context header")
+		logError(requestID, "Invalid request! Unable to unmarshal Salesforce x-request-context header")
 		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
 	// 2. Ensure all values are present in request context
 	if err := validateRequestContextValues(requestID, &XRequestContext); err != nil {
-		logError(requestID, "Invalid request!  Unable to validate Salesforce x-request-context header: "+err.Error())
+		logError(requestID, "Invalid request! Unable to validate Salesforce x-request-context header: "+err.Error())
 		return nil, err
 	}
 
@@ -153,7 +146,7 @@ func ValidateRequest(requestID string, headers http.Header) (*RequestHeader, err
 	truncatedOrgID := orgID[:len(orgID)-3]
 	if !strings.Contains(requestID, truncatedOrgID) {
 		// REVIEWME: If x-request-id header was missing, we generate one and set, so this will fail - warn?
-		logError(requestID, "Invalid request!  Missing or mismatch orgId in Salesforce x-request-context header")
+		logError(requestID, "Invalid request! Missing or mismatch orgId in Salesforce x-request-context header")
 		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 

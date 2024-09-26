@@ -3,6 +3,7 @@ module main
 go 1.22.1
 
 require (
+	github.com/cbrewster/slog-env v0.1.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/go-chi/chi/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

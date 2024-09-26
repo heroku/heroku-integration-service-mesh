@@ -30,5 +30,5 @@ func logError(requestID string, msg string) {
 
 func timeTrack(requestID string, startTime time.Time, name string) {
 	elapsedTime := time.Since(startTime)
-	logInfo(requestID, name+" took "+elapsedTime.String())
+	logDebug(requestID, name+" took "+elapsedTime.String())
 }

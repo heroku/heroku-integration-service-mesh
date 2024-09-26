@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	slogenv "github.com/cbrewster/slog-env"
 	"github.com/urfave/cli/v2"
 	"log"
 	"log/slog"
@@ -16,9 +17,12 @@ func main() {
 
 	config := conf.GetConfig()
 
+	logger := slog.New(slogenv.NewHandler(slog.NewTextHandler(os.Stderr, nil)))
+	slog.SetDefault(logger)
+
 	app := &cli.App{
 		Name:                   "heroku-integration-service-mesh",
-		Usage:                  "Service to pass communication between Heroku Integration and Customer App",
+		Usage:                  "Service that handles validation and authentication between clients and Heroku apps",
 		UseShortOptionHandling: true,
 		Version:                fmt.Sprintf("%s [os: %s arch: %s]", VERSION, runtime.GOOS, runtime.GOARCH),
 		Action:                 startServer,
