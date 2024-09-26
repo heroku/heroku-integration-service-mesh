@@ -10,10 +10,9 @@ import (
 	"strings"
 )
 
-const SALESFORCE_EXPECTED_HEADER_COUNT = 3
+const SALESFORCE_EXPECTED_HEADER_COUNT = 2
 
 const (
-	HdrNameRequestID   = "x-request-id"
 	HdrRequestsContext = "x-request-context"
 	HdrClientContext   = "x-client-context"
 	HdrSignature       = "x-signature"
@@ -50,13 +49,6 @@ func NewMalformedRequest(message string) *InvalidRequest {
 	}
 }
 
-// TODO: Reword validation errors to not reveal what is required to client
-var (
-	MissingValuesError    = errors.New("Invalid request")
-	InvalidRequestId      = errors.New("Invalid x-request-id")
-	InvalidRequestContext = errors.New("Invalid x-request-context")
-)
-
 type XRequestContext struct {
 	ID           string `json:"id"`
 	Auth         string `json:"auth"`
@@ -88,93 +80,95 @@ type RequestHeader struct {
  *
  * @param requestID
  * @param header
- * @return
+ * @return RequestHeader, error
  * @throws MeshValidationException
  * @throws InvalidRequest
  * @throws MalformedRequest
  */
-func ValidateRequest(requestID string, header http.Header) (string, *RequestHeader, error) {
-	xRequestID := header.Get(HdrNameRequestID)
-
-	// Override gen'd requestId w/ given request-id
-	if xRequestID != "" {
-		requestID = xRequestID
-	}
-
+func ValidateRequest(requestID string, headers http.Header) (*RequestHeader, error) {
 	logInfo(requestID, "Validating request...")
 
-	XRequestContextString := header.Get(HdrRequestsContext)
-	xClientContext := header.Get(HdrClientContext)
-	xSignature := header.Get(HdrSignature)
+	// Log headers
+	reqHeadersBytes, err := json.Marshal(headers)
+	if err != nil {
+		logDebug(requestID, fmt.Sprintf("Could not marshal request headers: %v", err))
+	} else {
+		logDebug(requestID, "Headers: "+string(reqHeadersBytes))
+	}
 
-	// first check if the salesforce headers are present
-	sfHeaderPresenceErrors := validatePresence(requestID, xRequestID, XRequestContextString, xClientContext)
+	XRequestContextString := headers.Get(HdrRequestsContext)
+	xClientContext := headers.Get(HdrClientContext)
+	xSignature := headers.Get(HdrSignature)
+
+	// Fsirst check if the salesforce headers are present
+	sfHeaderPresenceErrors := validatePresence(requestID, XRequestContextString, xClientContext)
 	if sfHeaderPresenceErrors != nil && len(sfHeaderPresenceErrors) > 0 {
 		// Found ISSUE w/ Salesforce headers found...
 		if len(sfHeaderPresenceErrors) == SALESFORCE_EXPECTED_HEADER_COUNT {
 			// ZERO Salesforce headers were found.  Is this a Data Action Targe request?
 			if xSignature != "" {
 				// Found Data Action Target request
-				return requestID, &RequestHeader{
+				return &RequestHeader{
+					XRequestID:          requestID,
 					IsSalesforceRequest: false,
 					XSignature:          xSignature,
 				}, nil
 			}
 
 			// NOT a Salesforce OR a Data Action Target request
-			logError(requestID, "Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
-			logError(requestID, "Invalid Data Action Target x-signature header")
+			logError(requestID, "Invalid request!  Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
+			logError(requestID, "Invalid request!  Invalid Data Action Target x-signature header")
 		} else {
 			// Found some, but NOT ALL Salesforce headers
-			logError(requestID, "Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
-			return requestID, nil, NewMalformedRequest("Invalid request")
+			logError(requestID, "Invalid request!  Invalid Salesforce header(s): "+strings.Join(sfHeaderPresenceErrors, ", "))
+			return nil, NewMalformedRequest("Invalid request")
 		}
 
-		return requestID, nil, NewInvalidRequest("Invalid request")
+		return nil, NewInvalidRequest("Invalid request")
 	}
 
-	// decode the x-request-context
+	// Additional Salesforce header validation
+	// 1. Decode the x-request-context
 	contextData, err := base64.StdEncoding.DecodeString(XRequestContextString)
 	if err != nil {
-		logError(requestID, "Invalid request: unable to decode Salesforce x-request-context header")
-		return requestID, nil, NewMalformedRequest("Invalid Salesforce x-request-context")
+		logError(requestID, "Invalid request!  Unable to decode Salesforce x-request-context header")
+		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
 	var XRequestContext XRequestContext
 	if err := json.Unmarshal(contextData, &XRequestContext); err != nil {
-		logError(requestID, "Invalid request: Unable to unmarshal Salesforce x-request-context header")
-		return requestID, nil, NewMalformedRequest("Invalid Salesforce x-request-context")
+		logError(requestID, "Invalid request!  Unable to unmarshal Salesforce x-request-context header")
+		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
-	// ensure all values are present in request context
+	// 2. Ensure all values are present in request context
 	if err := validateRequestContextValues(requestID, &XRequestContext); err != nil {
-		logError(requestID, "Invalid request: unable to validate Salesforce x-request-context header: "+err.Error())
-		return requestID, nil, err
+		logError(requestID, "Invalid request!  Unable to validate Salesforce x-request-context header: "+err.Error())
+		return nil, err
 	}
 
-	// validate that request is coming from an org
+	// 3. Validate that request is coming from an org
 	orgID := XRequestContext.OrgID
 	// TODO: Adjust once both requestId and orgId are both 18-char
 	truncatedOrgID := orgID[:len(orgID)-3]
-	if !strings.Contains(xRequestID, truncatedOrgID) {
-		logError(requestID, "Invalid request: missing orgId in Salesforce x-request-id header")
-		return requestID, nil, NewMalformedRequest("Invalid Salesforce x-request-id")
+	if !strings.Contains(requestID, truncatedOrgID) {
+		// REVIEWME: If x-request-id header was missing, we generate one and set, so this will fail - warn?
+		logError(requestID, "Invalid request!  Missing or mismatch orgId in Salesforce x-request-context header")
+		return nil, NewMalformedRequest("Invalid Salesforce x-request-context")
 	}
 
-	return requestID, &RequestHeader{
-		XRequestID:          xRequestID,
+	logInfo(requestID, "Valid request!")
+
+	return &RequestHeader{
+		XRequestID:          requestID,
 		XRequestContext:     XRequestContext,
 		XClientContext:      xClientContext,
 		IsSalesforceRequest: true,
 	}, nil
 }
 
-func validatePresence(requestID, xRequestID, XRequestContext, xClientContext string) []string {
+func validatePresence(requestID, XRequestContext, xClientContext string) []string {
 	var errors []string
-
-	if xRequestID == "" {
-		errors = append(errors, "Invalid x-request-id header")
-	}
 
 	if XRequestContext == "" {
 		errors = append(errors, "Invalid x-request-context header")
