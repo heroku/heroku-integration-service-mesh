@@ -3,7 +3,6 @@ package test
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"github.com/google/uuid"
 	"net/http"
 	"testing"
@@ -11,20 +10,20 @@ import (
 	mesh "main/mesh"
 )
 
-var MockID = uuid.New().String()
-var MockOrgID = uuid.New().String()
-var MockValidXRequestsContext = &mesh.XRequestsContext{
-	ID:           MockID,
+var MockOrgID18 = "001Ws00003GGHVDIA5"
+var MockUUID = uuid.New().String()
+var MockRequestID = MockOrgID18[:len(MockOrgID18)-3] + "-" + MockUUID
+var MockValidXRequestContext = &mesh.XRequestContext{
+	ID:           MockRequestID,
 	Auth:         "auth",
 	LoginUrl:     "http://login.salesforce.com",
 	OrgDomainUrl: "http://org.salesforce.com",
-	OrgID:        MockOrgID,
+	OrgID:        MockOrgID18,
 	Resource:     "resource",
 	Type:         "type",
 }
 
-func convertContextToString(context *mesh.XRequestsContext) string {
-
+func convertContextToString(context *mesh.XRequestContext) string {
 	requestContextJson, err := json.Marshal(context)
 	if err != nil {
 		panic(err)
@@ -34,15 +33,19 @@ func convertContextToString(context *mesh.XRequestsContext) string {
 }
 
 func TestValidateRequestSuccess(t *testing.T) {
+	headers := http.Header{}
+	headers.Set(mesh.HdrNameRequestID, MockRequestID)
+	headers.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestContext))
+	headers.Set(mesh.HdrClientContext, MockValidXRequestContext.ID)
 
-	header := http.Header{}
-	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)
-	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
-	header.Set(mesh.HdrClientContext, MockValidXRequestsContext.ID)
+	validateRequestHeader, err := mesh.ValidateRequest(MockRequestID, headers)
 
-	validateRequestHeader, err := mesh.ValidateRequest(header)
+	if validateRequestHeader.XRequestID != MockRequestID {
+		t.Error("Should have requestID")
+	}
+
 	if err != nil {
-		t.Error(err)
+		t.Error(err.Error())
 	}
 
 	if !validateRequestHeader.IsSalesforceRequest {
@@ -51,33 +54,39 @@ func TestValidateRequestSuccess(t *testing.T) {
 }
 
 func TestInvalidRequestID(t *testing.T) {
+	headers := http.Header{}
+	headers.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestContext))
+	headers.Set(mesh.HdrClientContext, MockValidXRequestContext.ID)
 
-	header := http.Header{}
-	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.ID)
-	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
-	header.Set(mesh.HdrClientContext, MockValidXRequestsContext.ID)
+	_, err := mesh.ValidateRequest("INVALID-REQUEST-ID", headers)
 
-	_, err := mesh.ValidateRequest(header)
-	if !errors.Is(err, mesh.InvalidRequestId) {
-		t.Errorf("Expected '%v' got %v", mesh.InvalidRequestId, err)
+	if err == nil {
+		t.Error("Expected error")
+	}
+
+	if err.(*mesh.InvalidRequest).HttpStatusCode() != http.StatusBadRequest {
+		t.Errorf("Expected %d, got %d", http.StatusBadRequest, err.(*mesh.InvalidRequest).HttpStatusCode())
 	}
 }
 
 func TestValidateRequestFailureMissingHeaderKey(t *testing.T) {
+	headers := http.Header{}
+	headers.Set(mesh.HdrNameRequestID, MockValidXRequestContext.OrgID)
+	headers.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestContext))
 
-	header := http.Header{}
-	header.Set(mesh.HdrNameRequestID, MockValidXRequestsContext.OrgID)
-	header.Set(mesh.HdrRequestsContext, convertContextToString(MockValidXRequestsContext))
+	_, err := mesh.ValidateRequest(MockRequestID, headers)
 
-	_, err := mesh.ValidateRequest(header)
-	if !errors.Is(err, mesh.MissingValuesError) {
-		t.Errorf("Expected '%v' got %v", mesh.MissingValuesError, err)
+	if err == nil {
+		t.Error("Expected error")
+	}
+
+	if err.(*mesh.InvalidRequest).HttpStatusCode() != http.StatusBadRequest {
+		t.Errorf("Expected %d, got %d", http.StatusBadRequest, err.(*mesh.InvalidRequest).HttpStatusCode())
 	}
 }
 
 func TestValidateRequestFailureMissingContextKey(t *testing.T) {
-
-	invalidXRequestsContext := &mesh.XRequestsContext{
+	invalidXRequestContext := &mesh.XRequestContext{
 		ID:           uuid.New().String(),
 		Auth:         "auth",
 		LoginUrl:     "http://login.salesforce.com",
@@ -85,23 +94,27 @@ func TestValidateRequestFailureMissingContextKey(t *testing.T) {
 		OrgID:        uuid.New().String(),
 	}
 
-	header := http.Header{}
-	header.Set(mesh.HdrNameRequestID, invalidXRequestsContext.OrgID)
-	header.Set(mesh.HdrRequestsContext, convertContextToString(invalidXRequestsContext))
-	header.Set(mesh.HdrClientContext, invalidXRequestsContext.ID)
+	headers := http.Header{}
+	headers.Set(mesh.HdrNameRequestID, MockValidXRequestContext.OrgID)
+	headers.Set(mesh.HdrRequestsContext, convertContextToString(invalidXRequestContext))
+	headers.Set(mesh.HdrClientContext, invalidXRequestContext.ID)
 
-	_, err := mesh.ValidateRequest(header)
+	_, err := mesh.ValidateRequest(MockRequestID, headers)
 	if err == nil {
 		t.Errorf("Expected 'missing value for x-requests-context: Resource' got %v", err)
 	}
 
 }
 
-func TestIsDataCloudRequest(t *testing.T) {
-	header := http.Header{}
-	header.Set(mesh.HdrSignature, uuid.New().String())
+func TestIsDataActionTargetRequest(t *testing.T) {
+	headers := http.Header{}
+	headers.Set(mesh.HdrSignature, uuid.New().String())
 
-	validateRequestHeader, err := mesh.ValidateRequest(header)
+	validateRequestHeader, err := mesh.ValidateRequest(MockRequestID, headers)
+
+	if validateRequestHeader.XRequestID != MockRequestID {
+		t.Error("Should have requestID")
+	}
 
 	if err != nil {
 		t.Error(err)

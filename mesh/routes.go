@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
 	"io"
-	"log/slog"
 	"main/conf"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type Routes struct {
@@ -23,11 +25,11 @@ type SalesforceAuthRequestBody struct {
 	OrgID        string `json:"org_id"`
 }
 
-type DataCloudAuthRequestBody struct {
-	ApiName   string                 `json:"api_name"`
-	OrgID     string                 `json:"org_id"`
-	Signature string                 `json:"signature"`
-	Payload   map[string]interface{} `json:"payload"`
+type DataActionTargetAuthRequestBody struct {
+	ApiName   string `json:"api_name"`
+	OrgID     string `json:"org_id"`
+	Signature string `json:"signature"`
+	Payload   string `json:"payload"`
 }
 
 func InitializeRoutes(router chi.Router) {
@@ -40,178 +42,239 @@ func NewRoutes() *Routes {
 }
 
 func getForwardUrl(r *http.Request, appPort string) (string, error) {
-
-	url := fmt.Sprintf("http://127.0.0.1:%s%s", appPort, r.URL.Path)
+	url := fmt.Sprintf("http://127.0.0.1:%s%s", appPort, r.URL.RequestURI())
 	return url, nil
 }
 
+// Intercepts Heroku Integration app API requests validating and authenticating
+// each request based on type - Salesforce or Data Action Target.
+//
+// For validation rules, see ValidateRequest.
+//
+// Requests are authenticated with the app's associated Heroku Integration add-on
+// resource.
+//
+// If validation and authentication are successful, the mesh forwards the request
+// to the target app API.
 func (routes *Routes) Pass() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(incomingRespWriter http.ResponseWriter, incomingReq *http.Request) {
 		config := conf.GetConfig()
 		should_auth_disable := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_AUTH_DISABLE")
-		run_auth, err := strconv.ParseBool(should_auth_disable)
+		bypass_auth, err := strconv.ParseBool(should_auth_disable)
 
-		// validate request headers
-		requestHeader, err := ValidateRequest(r.Header)
+		// Get requestID from heahder; if not found, generate and set
+		requestID := incomingReq.Header.Get(HdrNameRequestID)
+		if requestID == "" {
+			requestID = uuid.New().String()
+			incomingRespWriter.Header().Set(HdrNameRequestID, requestID)
+			logWarn(requestID, HdrNameRequestID+" not found! Generated and set "+requestID)
+		}
+		defer timeTrack(requestID, time.Now(), "Heroku Integration Service Mesh")
+
+		// Log request
+		apiPath := incomingReq.URL.Path
+		logInfo(requestID, "Processing request to API "+apiPath+"...")
+
+		// Validate request headers
+		requestHeader, err := ValidateRequest(requestID, incomingReq.Header)
 		if err != nil {
-			slog.Error("Error with validation: " + err.Error())
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			httpStatusCode := http.StatusUnauthorized
+			switch err.(type) {
+			case *InvalidRequest:
+				httpStatusCode = err.(*InvalidRequest).HttpStatusCode()
+			default:
+			}
+			logError(requestID, err.Error())
+			http.Error(incomingRespWriter, err.Error(), httpStatusCode)
 			return
 		}
 
-		if !run_auth {
-			// Call the endpoint based on type of request
+		// Get the request body from the incoming request
+		incomingReqBody, err := io.ReadAll(incomingReq.Body)
+		if err != nil {
+			logError(requestID, "Error parsing body from the request: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
+			return
+		}
+
+		var orgId string
+		if !bypass_auth {
+			// Call the endpoint based on type of request - Salesforce or Data Action Target
 			var finalStatus int
+			var unauthorizedMsg string
+
 			if requestHeader.IsSalesforceRequest {
-				slog.Debug("Building salesforce auth request for add-on")
+				logInfo(requestID, "Found Salesforce request")
+
+				orgId = requestHeader.XRequestContext.OrgID
+				unauthorizedMsg = "Org " + orgId + " not found or not connected to app"
 				authRequestBody := SalesforceAuthRequestBody{
 					OrgDomainUrl: requestHeader.XRequestContext.OrgDomainUrl,
 					CoreJWTToken: requestHeader.XRequestContext.Auth,
 					OrgID:        requestHeader.XRequestContext.OrgID,
 				}
 
-				slog.Info("Auth: " + requestHeader.XRequestContext.Auth)
+				// FIXME: Remove when no longer needed
+				logDebug(requestID, "!! REMOVEME !! Auth: "+requestHeader.XRequestContext.Auth)
 
-				status, err := callSalesforceAddonAuth(authRequestBody, config.IntegrationUrl, config.InvocationToken, requestHeader.XRequestID)
+				status, err := callSalesforceAuth(requestID, authRequestBody, config.IntegrationUrl, config.InvocationToken)
 				if err != nil {
-					slog.Error("Error Authorizing Salesforce request from add on: " + err.Error())
-					http.Error(w, err.Error(), http.StatusUnauthorized)
+					logError(requestID, "Error authorizing Salesforce request: "+err.Error())
+					http.Error(incomingRespWriter, err.Error(), http.StatusUnauthorized)
 					return
 				}
-				slog.Info("Salesforce request has been evaluated from add-on")
 				finalStatus = status
 
-			} else { // This means that it is a data cloud request
+			} else { // This means that it is a Data Action Target request
+				logInfo(requestID, "Found Data Action Target request")
 
 				// Get data from query params
-				queryParams := r.URL.Query()
+				queryParams := incomingReq.URL.Query()
 
-				// Get the request body from the initial request
-				var bodyData map[string]interface{}
-				err := json.NewDecoder(r.Body).Decode(&bodyData)
-				if err != nil {
-					slog.Error("Error parsing body from the request: " + err.Error())
-					http.Error(w, err.Error(), http.StatusForbidden)
-					return
-				}
-
-				// Build DataCloudAuth Request Body
-				dataCloudAuthRequestBody := DataCloudAuthRequestBody{
+				// Build Data Action Target authentication request Body
+				orgId = queryParams.Get(OrgIdQueryParm)
+				dataActionTargetAuthRequestBody := DataActionTargetAuthRequestBody{
 					ApiName:   queryParams.Get(ApiNameQueryParam),
-					OrgID:     queryParams.Get(OrgIdQueryParm),
+					OrgID:     orgId,
 					Signature: requestHeader.XSignature,
-					Payload:   bodyData,
+					Payload:   string(incomingReqBody),
 				}
+				unauthorizedMsg = "Org " + orgId + " not found or not connected to app and/or Data Action Target '" +
+					dataActionTargetAuthRequestBody.ApiName + "' signed key not found or is invalid"
 
-				// call the addon
-				status, err := callDataCloudAddonAuth(dataCloudAuthRequestBody, config.IntegrationUrl)
+				// Authenticate Data Action Target request
+				status, err := callDataTargetActionAuth(requestID, dataActionTargetAuthRequestBody, config.IntegrationUrl)
 				if err != nil {
-					slog.Error("Error sending Datacloud request tp add on: " + err.Error())
-					http.Error(w, err.Error(), status)
+					logError(requestID, "Error authenticating Data Action Target request: "+err.Error())
+					http.Error(incomingRespWriter, err.Error(), status)
 					return
 				}
-				slog.Info("Datacloud request has been evaluated from add-on")
+
 				if status != http.StatusOK {
 					status = http.StatusForbidden
 				}
 				finalStatus = status
-
 			}
 
 			if finalStatus != http.StatusOK {
-				slog.Error("Authentication failed from add-on: " + strconv.Itoa(finalStatus))
-				http.Error(w, http.StatusText(finalStatus), finalStatus)
-				w.WriteHeader(finalStatus)
+				if finalStatus == http.StatusForbidden {
+					logInfo(requestID, "Unauthorized request! "+unauthorizedMsg)
+				} else {
+					logError(requestID, "Failed Integration authentication request: "+strconv.Itoa(finalStatus))
+				}
+				http.Error(incomingRespWriter, http.StatusText(finalStatus), finalStatus)
+				incomingRespWriter.WriteHeader(finalStatus)
 				return
 			}
-
+		} else {
+			logWarn(requestID, "Bypassed authentication")
 		}
-		slog.Info("Forwarding the request")
-		forwardUrl, err := getForwardUrl(r, config.AppPort)
-		proxyReq, err := http.NewRequest(r.Method, forwardUrl, r.Body)
+
+		// Successful auth'd!
+		logInfo(requestID, "Authenticated request!")
+
+		// Forward request to target API
+		forwardApiUrl, err := getForwardUrl(incomingReq, config.AppPort)
+		logInfo(requestID, "Forwarding request to app API "+forwardApiUrl)
+		forwardReq, err := http.NewRequest(incomingReq.Method, forwardApiUrl, bytes.NewReader(incomingReqBody))
 		if err != nil {
-			slog.Error("Error creating request: " + err.Error())
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			logError(requestID, "Error assembling request: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
 		}
 
-		// adding the same headers for the request
-		for header, values := range r.Header {
+		// Apply request headers to forward request
+		for header, values := range incomingReq.Header {
 			for _, value := range values {
-				proxyReq.Header.Set(header, value)
+				forwardReq.Header.Set(header, value)
 			}
 		}
 
+		// Forward request
 		client := &http.Client{}
-		resp, err := client.Do(proxyReq)
+		forwardResp, err := client.Do(forwardReq)
 		if err != nil {
-			slog.Error("Error sending proxy request: " + err.Error())
-			http.Error(w, "Error sending proxy request", http.StatusBadGateway)
+			logError(requestID, "Error forwarding request: "+err.Error())
+			http.Error(incomingRespWriter, "Error forwarding request "+requestID, http.StatusBadGateway)
 		}
 
-		defer resp.Body.Close()
-
-		for header, values := range resp.Header {
+		// Copy incoming headers to forward request
+		for header, values := range forwardResp.Header {
 			for _, value := range values {
-				w.Header().Add(header, value)
+				incomingRespWriter.Header().Add(header, value)
 			}
 		}
 
-		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
+		// Copy forward request to incoming response
+		incomingRespWriter.WriteHeader(forwardResp.StatusCode)
+		io.Copy(incomingRespWriter, forwardResp.Body)
+		defer forwardResp.Body.Close()
 	}
 }
 
-func callSalesforceAddonAuth(authBody SalesforceAuthRequestBody, url, token, requestID string) (int, error) {
+// Call Integration Service API to authenticate Salesforce request.
+func callSalesforceAuth(requestID string, sfAuthRequestBody SalesforceAuthRequestBody, integrationUrl string, integrationToken string) (int, error) {
+	logInfo(requestID, "Authenticating Salesforce request for org "+sfAuthRequestBody.OrgID+", domain "+
+		sfAuthRequestBody.OrgDomainUrl)
 
-	jsonBody, err := json.Marshal(authBody)
-	// call the addon service
-	slog.Debug("Calling Salesforce addon: " + url)
-	slog.Debug("Using Token: " + token)
-	req, err := http.NewRequest(http.MethodPost, url+"/invocations/authentication", bytes.NewBuffer(jsonBody))
+	operation := "Salesforce authentication"
+	jsonBody, err := json.Marshal(sfAuthRequestBody)
+	response, err := callIntegrationService(requestID, operation, "/invocations/authentication",
+		http.MethodPost, jsonBody)
 	if err != nil {
-		slog.Error("Error creating auth request: %v", err)
-		return http.StatusBadRequest, fmt.Errorf("error creating auth request: %v", err)
+		logError(requestID, fmt.Sprintf("Error invoking %s: %v", operation, err))
+		return http.StatusBadRequest, fmt.Errorf("error invoking %s %s: %v", operation, requestID, err)
+	}
+
+	defer response.Body.Close()
+
+	return response.StatusCode, nil
+}
+
+// Call Integration Service API to authenticate Data Action Target webhook request.
+func callDataTargetActionAuth(requestID string, dataActionTargetAuthRequestBody DataActionTargetAuthRequestBody, integrationUrl string) (int, error) {
+	logInfo(requestID, "Authenticating Data Action Target '"+dataActionTargetAuthRequestBody.ApiName+"' request from org "+
+		dataActionTargetAuthRequestBody.OrgID+" with payload length "+strconv.Itoa(len(dataActionTargetAuthRequestBody.Payload))+"...")
+
+	operation := "Data Action Target authentication"
+	jsonBody, err := json.Marshal(dataActionTargetAuthRequestBody)
+	response, err := callIntegrationService(requestID, operation, "/connections/datacloud/authenticate",
+		http.MethodPost, jsonBody)
+	if err != nil {
+		logError(requestID, fmt.Sprintf("Error invoking %s: %v", operation, err))
+		return http.StatusBadRequest, fmt.Errorf("error invoking %s %s: %v", operation, requestID, err)
+	}
+
+	defer response.Body.Close()
+
+	return response.StatusCode, nil
+}
+
+// Call given Integration Service API with given request JSON body.
+func callIntegrationService(requestID string, operation string, apiPath string, httpMethod string, jsonBody []byte) (*http.Response, error) {
+	defer timeTrack(requestID, time.Now(), operation)
+
+	config := conf.GetConfig()
+	integrationApiUrl := config.IntegrationUrl + apiPath
+	req, err := http.NewRequest(httpMethod, integrationApiUrl, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		logError(requestID, fmt.Sprintf("Error assembling %s request: %v", operation, err))
+		return nil, fmt.Errorf("error assembling %s request %s: %v", operation, requestID, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	// TODO: Integration service to support auth token for every request
+	req.Header.Set("Authorization", "Bearer "+config.InvocationToken)
 	req.Header.Set("REQUEST_ID", requestID)
 
+	// TODO: Remove when no longer needed
+	logDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Integration service API %s [%s] with body %s",
+		integrationApiUrl, config.InvocationToken, jsonBody))
+
+	// Invoke
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	if err != nil {
-		slog.Error("Error invoking authentication: %v", err)
-		return http.StatusBadRequest, fmt.Errorf("error invoking authentication %v", err)
-	}
 
-	fmt.Printf("Request Went Through: %s", resp.Status)
+	logInfo(requestID, "StatusCode for "+operation+" request: "+strconv.Itoa(resp.StatusCode))
 
-	defer resp.Body.Close()
-
-	return resp.StatusCode, nil
-
-}
-
-func callDataCloudAddonAuth(authBody DataCloudAuthRequestBody, u string) (int, error) {
-
-	jsonBody, err := json.Marshal(authBody)
-	url := u + "/connections/datacloud/authenticate"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		slog.Error("Error creating auth request: %v", err)
-		return http.StatusBadRequest, fmt.Errorf("error creating auth request: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		slog.Error("Error invoking authentication: %v", err)
-		return http.StatusBadRequest, fmt.Errorf("error invoking authentication %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	return resp.StatusCode, nil
-
+	return resp, err
 }
