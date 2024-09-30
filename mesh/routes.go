@@ -224,7 +224,7 @@ func invokeSalesforceAuth(requestID string, config *conf.Config, sfAuthRequestBo
 
 	operation := "Salesforce authentication"
 	jsonBody, err := json.Marshal(sfAuthRequestBody)
-	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, "/invocations/authentication",
+	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, config.HerokuInvocationSalesforceAuthPath,
 		http.MethodPost, jsonBody)
 
 	return statusCode, body, err
@@ -237,7 +237,7 @@ func invokeDataTargetActionAuth(requestID string, config *conf.Config, dataActio
 
 	operation := "Data Action Target authentication"
 	jsonBody, err := json.Marshal(dataActionTargetAuthRequestBody)
-	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, "/connections/datacloud/authenticate",
+	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, config.HerokuIntegrationDataActionTargetAuthPath,
 		http.MethodPost, jsonBody)
 
 	return statusCode, body, err

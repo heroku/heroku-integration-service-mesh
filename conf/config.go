@@ -8,12 +8,19 @@ import (
 	cli "github.com/urfave/cli/v2"
 )
 
+const (
+	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
+	HerokuIntegrationDataActionTargetAuthPath = "/connections/datacloud/authenticate"
+)
+
 type Config struct {
-	PublicPort            string
-	PrivatePort           string
-	AppPort               string
-	HerokuInvocationToken string
-	HerokuIntegrationUrl  string
+	PublicPort                                string
+	PrivatePort                               string
+	AppPort                                   string
+	HerokuInvocationToken                     string
+	HerokuIntegrationUrl                      string
+	HerokuInvocationSalesforceAuthPath        string
+	HerokuIntegrationDataActionTargetAuthPath string
 }
 
 func (c *Config) Flags() []cli.Flag {
@@ -45,11 +52,13 @@ var defaultConfig = sync.OnceValue(func() *Config {
 	}
 
 	return &Config{
-		PublicPort:            "8070",
-		PrivatePort:           "8071",
-		AppPort:               appPort,
-		HerokuInvocationToken: herokuIntegrationToken,
-		HerokuIntegrationUrl:  herokuIntegrationUrl,
+		PublicPort:                         "8070",
+		PrivatePort:                        "8071",
+		AppPort:                            appPort,
+		HerokuInvocationToken:              herokuIntegrationToken,
+		HerokuIntegrationUrl:               herokuIntegrationUrl,
+		HerokuInvocationSalesforceAuthPath: HerokuIntegrationSalesforceAuthPath,
+		HerokuIntegrationDataActionTargetAuthPath: HerokuIntegrationDataActionTargetAuthPath,
 	}
 })
 
