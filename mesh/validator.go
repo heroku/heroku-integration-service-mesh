@@ -68,7 +68,7 @@ type RequestHeader struct {
 	IsSalesforceRequest bool            `json:"isDataActionTargetRequest"`
 }
 
-// Validate the request headers based on type - Salesforce or Data Action Target.
+// ValidateRequest validates the request headers based on type - Salesforce or Data Action Target.
 //
 // Request Salesforce request headers:
 //   - x-request-id

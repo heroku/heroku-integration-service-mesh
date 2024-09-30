@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"main/mesh"
 	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )
 
 // Using chi router to build the HTTP routes

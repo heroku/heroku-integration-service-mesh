@@ -1,4 +1,4 @@
-module main
+module github.com/heroku/heroku-integration-service-mesh
 
 go 1.22.1
 
