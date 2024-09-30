@@ -2,23 +2,20 @@ package main
 
 import (
 	"fmt"
-	slogenv "github.com/cbrewster/slog-env"
-	"github.com/urfave/cli/v2"
 	"log"
 	"log/slog"
-	"main/conf"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
+
+	slogenv "github.com/cbrewster/slog-env"
+	"github.com/heroku/heroku-integration-service-mesh/conf"
+	cli "github.com/urfave/cli/v2"
 )
 
 func main() {
-
 	config := conf.GetConfig()
-
-	logger := slog.New(slogenv.NewHandler(slog.NewTextHandler(os.Stderr, nil)))
-	slog.SetDefault(logger)
 
 	app := &cli.App{
 		Name:                   "heroku-integration-service-mesh",
@@ -85,8 +82,9 @@ func setEnvDefault(key, fallback string) {
 }
 
 func setDefaultLogger() {
-	logger := slog.With(
+	logger := slog.New(slogenv.NewHandler(slog.NewTextHandler(os.Stderr, nil)).WithAttrs([]slog.Attr{
 		slog.String("app", os.Getenv("HEROKU_APP_NAME")),
-	)
+		slog.String("source", "heroku-integration-service-mesh"),
+	}))
 	slog.SetDefault(logger)
 }

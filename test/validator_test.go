@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	mesh "main/mesh"
+	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )
 
 var MockOrgID18 = "001Ws00003GGHVDIA5"

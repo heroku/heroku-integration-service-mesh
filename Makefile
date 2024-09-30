@@ -15,7 +15,7 @@ help: ## show this
 	@grep -E '^[ a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: | fmt vet bin/main
+build: | fmt vet bin/heroku-integration-service-mesh
 	$(info $(M) done)
 
 .PHONY: lint
@@ -46,4 +46,8 @@ generate: ## run go generate
 
 bin/%: $(SRC_FILES)
 	$(info $(M) building $@ …)
-	$(Q) $(CC) -o $@ $*
+	$(Q) $(CC) -o $@ github.com/heroku/heroku-integration-service-mesh
+
+release: | build ## run to generate and tar heroku-integration-service-mesh binary
+	$(info $(M) tar heroku-integration-service-mesh ...)
+	$(Q) tar -zcvf heroku-integration-service-mesh.tar.gz -C bin heroku-integration-service-mesh

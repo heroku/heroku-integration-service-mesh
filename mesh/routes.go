@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"main/conf"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/heroku/heroku-integration-service-mesh/conf"
 )
 
 type Routes struct {
@@ -34,7 +34,7 @@ type DataActionTargetAuthRequestBody struct {
 
 func InitializeRoutes(router chi.Router) {
 	routes := NewRoutes()
-	router.HandleFunc("/*", routes.Pass())
+	router.HandleFunc("/*", routes.ServiceMesh())
 }
 
 func NewRoutes() *Routes {
@@ -46,7 +46,7 @@ func getForwardUrl(r *http.Request, appPort string) (string, error) {
 	return url, nil
 }
 
-// Intercepts Heroku Integration app API requests validating and authenticating
+// ServiceMesh intercepts Heroku Integration app API requests validating and authenticating
 // each request based on type - Salesforce or Data Action Target.
 //
 // For validation rules, see ValidateRequest.
@@ -56,24 +56,26 @@ func getForwardUrl(r *http.Request, appPort string) (string, error) {
 //
 // If validation and authentication are successful, the mesh forwards the request
 // to the target app API.
-func (routes *Routes) Pass() http.HandlerFunc {
+func (routes *Routes) ServiceMesh() http.HandlerFunc {
 	return func(incomingRespWriter http.ResponseWriter, incomingReq *http.Request) {
+		startTime := time.Now()
 		config := conf.GetConfig()
+		apiPath := incomingReq.URL.Path
+
+		// Bypass circuits
 		should_auth_disable := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_AUTH_DISABLE")
 		bypass_auth, err := strconv.ParseBool(should_auth_disable)
 
-		// Get requestID from heahder; if not found, generate and set
+		// Get requestID from header; if not found, generate and set
 		requestID := incomingReq.Header.Get(HdrNameRequestID)
 		if requestID == "" {
 			requestID = uuid.New().String()
 			incomingRespWriter.Header().Set(HdrNameRequestID, requestID)
 			logWarn(requestID, HdrNameRequestID+" not found! Generated and set "+requestID)
 		}
-		defer timeTrack(requestID, time.Now(), "Heroku Integration Service Mesh")
 
 		// Log request
-		apiPath := incomingReq.URL.Path
-		logInfo(requestID, "Processing request to API "+apiPath+"...")
+		logInfo(requestID, "Processing request to "+apiPath+"...")
 
 		// Validate request headers
 		requestHeader, err := ValidateRequest(requestID, incomingReq.Header)
@@ -92,15 +94,16 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		// Get the request body from the incoming request
 		incomingReqBody, err := io.ReadAll(incomingReq.Body)
 		if err != nil {
-			logError(requestID, "Error parsing body from the request: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
+			logError(requestID, "Unable to parse incoming request body: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
 			return
 		}
 
 		var orgId string
+		var authResponseStatus int
+		var authResponseBody string
 		if !bypass_auth {
-			// Call the endpoint based on type of request - Salesforce or Data Action Target
-			var finalStatus int
+			// Call Integration endpoint based on type of request - Salesforce or Data Action Target
 			var unauthorizedMsg string
 
 			if requestHeader.IsSalesforceRequest {
@@ -117,13 +120,12 @@ func (routes *Routes) Pass() http.HandlerFunc {
 				// FIXME: Remove when no longer needed
 				logDebug(requestID, "!! REMOVEME !! Auth: "+requestHeader.XRequestContext.Auth)
 
-				status, err := callSalesforceAuth(requestID, authRequestBody, config.IntegrationUrl, config.InvocationToken)
+				authResponseStatus, authResponseBody, err = invokeSalesforceAuth(requestID, config, authRequestBody)
 				if err != nil {
-					logError(requestID, "Error authorizing Salesforce request: "+err.Error())
-					http.Error(incomingRespWriter, err.Error(), http.StatusUnauthorized)
+					logError(requestID, "Unable to authenticate Salesforce request: "+err.Error())
+					http.Error(incomingRespWriter, err.Error(), authResponseStatus)
 					return
 				}
-				finalStatus = status
 
 			} else { // This means that it is a Data Action Target request
 				logInfo(requestID, "Found Data Action Target request")
@@ -143,43 +145,45 @@ func (routes *Routes) Pass() http.HandlerFunc {
 					dataActionTargetAuthRequestBody.ApiName + "' signed key not found or is invalid"
 
 				// Authenticate Data Action Target request
-				status, err := callDataTargetActionAuth(requestID, dataActionTargetAuthRequestBody, config.IntegrationUrl)
+				authResponseStatus, authResponseBody, err = invokeDataTargetActionAuth(requestID, config, dataActionTargetAuthRequestBody)
 				if err != nil {
-					logError(requestID, "Error authenticating Data Action Target request: "+err.Error())
-					http.Error(incomingRespWriter, err.Error(), status)
+					logError(requestID, "Unable to authenticate Data Action Target request: "+err.Error())
+					http.Error(incomingRespWriter, err.Error(), authResponseStatus)
 					return
 				}
-
-				if status != http.StatusOK {
-					status = http.StatusForbidden
-				}
-				finalStatus = status
 			}
 
-			if finalStatus != http.StatusOK {
-				if finalStatus == http.StatusForbidden {
-					logInfo(requestID, "Unauthorized request! "+unauthorizedMsg)
+			// Handle unauthorized or unexpected failed auth requests
+			if authResponseStatus != http.StatusOK {
+				if authResponseStatus == http.StatusUnauthorized || authResponseStatus == http.StatusForbidden {
+					logWarn(requestID, "Unauthorized request! "+unauthorizedMsg)
+					// Unauthenticated requests that appear to be valid are 403 Forbidden
+					http.Error(incomingRespWriter, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					incomingRespWriter.WriteHeader(authResponseStatus)
 				} else {
-					logError(requestID, "Failed Integration authentication request: "+strconv.Itoa(finalStatus))
+					// Unexpected error
+					logError(requestID, "Unable to authenticate request: statusCode "+strconv.Itoa(authResponseStatus)+", body '"+authResponseBody+"'")
+					http.Error(incomingRespWriter, authResponseBody, authResponseStatus)
+					incomingRespWriter.WriteHeader(authResponseStatus)
 				}
-				http.Error(incomingRespWriter, http.StatusText(finalStatus), finalStatus)
-				incomingRespWriter.WriteHeader(finalStatus)
+
+				// Do NOT forward
 				return
 			}
 		} else {
 			logWarn(requestID, "Bypassed authentication")
 		}
 
-		// Successful auth'd!
+		// Successful authentication!
 		logInfo(requestID, "Authenticated request!")
 
 		// Forward request to target API
 		forwardApiUrl, err := getForwardUrl(incomingReq, config.AppPort)
-		logInfo(requestID, "Forwarding request to app API "+forwardApiUrl)
+		logInfo(requestID, "Forwarding request to "+forwardApiUrl)
 		forwardReq, err := http.NewRequest(incomingReq.Method, forwardApiUrl, bytes.NewReader(incomingReqBody))
 		if err != nil {
-			logError(requestID, "Error assembling request: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
+			logError(requestID, "Unable to forward request: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusInternalServerError)
 		}
 
 		// Apply request headers to forward request
@@ -193,8 +197,8 @@ func (routes *Routes) Pass() http.HandlerFunc {
 		client := &http.Client{}
 		forwardResp, err := client.Do(forwardReq)
 		if err != nil {
-			logError(requestID, "Error forwarding request: "+err.Error())
-			http.Error(incomingRespWriter, "Error forwarding request "+requestID, http.StatusBadGateway)
+			logError(requestID, "Unable to forward request: "+err.Error())
+			http.Error(incomingRespWriter, "Unable to forward request "+requestID, http.StatusBadGateway)
 		}
 
 		// Copy incoming headers to forward request
@@ -204,6 +208,8 @@ func (routes *Routes) Pass() http.HandlerFunc {
 			}
 		}
 
+		timeTrack(requestID, startTime, "Heroku Integration Service Mesh")
+
 		// Copy forward request to incoming response
 		incomingRespWriter.WriteHeader(forwardResp.StatusCode)
 		io.Copy(incomingRespWriter, forwardResp.Body)
@@ -211,70 +217,74 @@ func (routes *Routes) Pass() http.HandlerFunc {
 	}
 }
 
-// Call Integration Service API to authenticate Salesforce request.
-func callSalesforceAuth(requestID string, sfAuthRequestBody SalesforceAuthRequestBody, integrationUrl string, integrationToken string) (int, error) {
+// Authenticate Salesforce request
+func invokeSalesforceAuth(requestID string, config *conf.Config, sfAuthRequestBody SalesforceAuthRequestBody) (int, string, error) {
 	logInfo(requestID, "Authenticating Salesforce request for org "+sfAuthRequestBody.OrgID+", domain "+
-		sfAuthRequestBody.OrgDomainUrl)
+		sfAuthRequestBody.OrgDomainUrl+"...")
 
 	operation := "Salesforce authentication"
 	jsonBody, err := json.Marshal(sfAuthRequestBody)
-	response, err := callIntegrationService(requestID, operation, "/invocations/authentication",
+	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, "/invocations/authentication",
 		http.MethodPost, jsonBody)
-	if err != nil {
-		logError(requestID, fmt.Sprintf("Error invoking %s: %v", operation, err))
-		return http.StatusBadRequest, fmt.Errorf("error invoking %s %s: %v", operation, requestID, err)
-	}
 
-	defer response.Body.Close()
-
-	return response.StatusCode, nil
+	return statusCode, body, err
 }
 
-// Call Integration Service API to authenticate Data Action Target webhook request.
-func callDataTargetActionAuth(requestID string, dataActionTargetAuthRequestBody DataActionTargetAuthRequestBody, integrationUrl string) (int, error) {
+// Authenticate Data Action Target webhook request
+func invokeDataTargetActionAuth(requestID string, config *conf.Config, dataActionTargetAuthRequestBody DataActionTargetAuthRequestBody) (int, string, error) {
 	logInfo(requestID, "Authenticating Data Action Target '"+dataActionTargetAuthRequestBody.ApiName+"' request from org "+
 		dataActionTargetAuthRequestBody.OrgID+" with payload length "+strconv.Itoa(len(dataActionTargetAuthRequestBody.Payload))+"...")
 
 	operation := "Data Action Target authentication"
 	jsonBody, err := json.Marshal(dataActionTargetAuthRequestBody)
-	response, err := callIntegrationService(requestID, operation, "/connections/datacloud/authenticate",
+	statusCode, body, err := invokeHerokuIntegrationService(requestID, config, operation, "/connections/datacloud/authenticate",
 		http.MethodPost, jsonBody)
-	if err != nil {
-		logError(requestID, fmt.Sprintf("Error invoking %s: %v", operation, err))
-		return http.StatusBadRequest, fmt.Errorf("error invoking %s %s: %v", operation, requestID, err)
-	}
 
-	defer response.Body.Close()
-
-	return response.StatusCode, nil
+	return statusCode, body, err
 }
 
-// Call given Integration Service API with given request JSON body.
-func callIntegrationService(requestID string, operation string, apiPath string, httpMethod string, jsonBody []byte) (*http.Response, error) {
+// Invoke given Heroku Integration API with given request JSON body.
+func invokeHerokuIntegrationService(requestID string, config *conf.Config, operation string, apiPath string, httpMethod string, jsonBody []byte) (int, string, error) {
 	defer timeTrack(requestID, time.Now(), operation)
 
-	config := conf.GetConfig()
-	integrationApiUrl := config.IntegrationUrl + apiPath
+	statusCode := http.StatusInternalServerError
+	body := ""
+
+	integrationApiUrl := config.HerokuIntegrationUrl + apiPath
 	req, err := http.NewRequest(httpMethod, integrationApiUrl, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		logError(requestID, fmt.Sprintf("Error assembling %s request: %v", operation, err))
-		return nil, fmt.Errorf("error assembling %s request %s: %v", operation, requestID, err)
+		logError(requestID, fmt.Sprintf("Unable to assemble %s request: %v", operation, err))
+		return statusCode, body, fmt.Errorf("unable to assemble %s request %s: %v", operation, requestID, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	// TODO: Integration service to support auth token for every request
-	req.Header.Set("Authorization", "Bearer "+config.InvocationToken)
+	req.Header.Set("Authorization", "Bearer "+config.HerokuInvocationToken)
 	req.Header.Set("REQUEST_ID", requestID)
 
 	// TODO: Remove when no longer needed
-	logDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Integration service API %s [%s] with body %s",
-		integrationApiUrl, config.InvocationToken, jsonBody))
+	logDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Heroku Integration API %s [%s] with body %s",
+		integrationApiUrl, config.HerokuInvocationToken, jsonBody))
 
 	// Invoke
 	client := &http.Client{}
 	resp, err := client.Do(req)
+	if err != nil {
+		logError(requestID, fmt.Sprintf("Unable to invoke %s: %v", operation, err))
+		return statusCode, body, fmt.Errorf("unable to invoke %s request %s: %v", operation, requestID, err)
+	}
 
-	logInfo(requestID, "StatusCode for "+operation+" request: "+strconv.Itoa(resp.StatusCode))
+	defer resp.Body.Close()
 
-	return resp, err
+	// Capture statusCode and body
+	statusCode = resp.StatusCode
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logError(requestID, err.Error())
+	} else {
+		body = string(bodyBytes)
+	}
+
+	logInfo(requestID, "Response for "+operation+" request ("+apiPath+"): statusCode "+strconv.Itoa(statusCode)+", body '"+body+"'")
+
+	return statusCode, body, nil
 }
