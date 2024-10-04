@@ -13,7 +13,7 @@ $ make build
 ▶ building bin/heroku-integration-service-mesh …
 ▶ done
 ``` 
-2. Run Heroku Integration add-on service locally or build and run fake service locally.
+2. Run Heroku Integration add-on service locally or run fake service locally that mocks Heroku Integration's authentication APIs.
 ```shell
 $ npm start
 
@@ -27,7 +27,7 @@ $ npm start
 $ pwd
 /home/cwall/git/heroku-sf-integration-nodejs
 
-$ GO_LOG=debug HEROKU_INTEGRATION_INVOCATIONS_TOKEN=TOKEN HEROKU_INTEGRATION_API_URL=http://localhost:3000 APP_PORT=8080 /home/cwall/git/heroku-integration-service-mesh/bin/heroku-integration-service-mesh npm start
+$ GO_LOG=debug HEROKU_INTEGRATION_TOKEN=TOKEN HEROKU_INTEGRATION_API_URL=http://localhost:3000 APP_PORT=8080 /home/cwall/git/heroku-integration-service-mesh/bin/heroku-integration-service-mesh npm start
 time=2024-09-30T15:41:57.421-06:00 level=INFO msg=environment app=local source=heroku-integration-service-mesh go_version:=go1.22.1 os=linux arch=amd64 http_port=8070 version=v0.12.1 environment=local app_port=8080
 time=2024-09-30T15:41:57.421-06:00 level=INFO msg="router running" app=local source=heroku-integration-service-mesh port=8070
 

@@ -8,9 +8,10 @@ import (
 	cli "github.com/urfave/cli/v2"
 )
 
+// Heroku Integration authentication API paths
 const (
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
-	HerokuIntegrationDataActionTargetAuthPath = "/connections/datacloud/authenticate"
+	HerokuIntegrationDataActionTargetAuthPath = "/data_action_target/authenticate"
 )
 
 type Config struct {
@@ -39,7 +40,7 @@ func (c *Config) Flags() []cli.Flag {
 var defaultConfig = sync.OnceValue(func() *Config {
 
 	appPort := os.Getenv("APP_PORT")
-	herokuIntegrationToken := os.Getenv("HEROKU_INTEGRATION_INVOCATIONS_TOKEN")
+	herokuIntegrationToken := os.Getenv("HEROKU_INTEGRATION_TOKEN")
 	herokuIntegrationUrl := os.Getenv("HEROKU_INTEGRATION_API_URL")
 
 	if herokuIntegrationUrl == "" || herokuIntegrationToken == "" {
