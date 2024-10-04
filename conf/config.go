@@ -11,7 +11,7 @@ import (
 // Heroku Integration authentication API paths
 const (
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
-	HerokuIntegrationDataActionTargetAuthPath = "/data_action_target/authenticate"
+	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
 )
 
 type Config struct {
