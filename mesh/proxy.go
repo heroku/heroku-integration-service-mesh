@@ -143,7 +143,11 @@ func ShouldBypassValidationAuthentication(requestID string, config *conf.Config,
 	}
 
 	for _, value := range config.YamlConfig.Authentication.BypassRoutes {
-		if strings.HasPrefix(apiPath, value+"/") || strings.HasPrefix(apiPath, value+"?") {
+		if strings.HasPrefix(apiPath, value+"?") {
+			return true
+		}
+
+		if strings.HasSuffix(value, "*") && strings.HasPrefix(apiPath, value[0:(len(value)-1)]) {
 			return true
 		}
 	}

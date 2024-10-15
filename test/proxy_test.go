@@ -26,7 +26,7 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 
 	yamlConfig := &conf.YamlConfig{
 		Authentication: conf.Authentication{
-			BypassRoutes: []string{"/byPassMe"},
+			BypassRoutes: []string{"/byPassMe", "/favicon*"},
 		},
 	}
 	config = &conf.Config{
@@ -39,13 +39,28 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 	}
 
 	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/byPassMe/moreStuffHere")
-	if !shouldBypass {
-		t.Error("Should bypass")
+	if shouldBypass {
+		t.Error("Should NOT bypass")
 	}
 
 	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/byPassMe?moreStuffHere=true")
 	if !shouldBypass {
 		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/favicon-32x32.png")
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/favicon/another.png")
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/favIcon-32x32.png")
+	if shouldBypass {
+		t.Error("Should NOT bypass")
 	}
 
 	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/bypassme")
