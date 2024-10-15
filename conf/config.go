@@ -111,7 +111,7 @@ func ParseYamlConfig(yamlFileName string) (*YamlConfig, error) {
 			return nil, err
 		}
 	}
-	fmt.Printf("yamlConfig: %v", yamlConfig)
+
 	return yamlConfig, nil
 }
 

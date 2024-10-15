@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	slogenv "github.com/cbrewster/slog-env"
 	"github.com/heroku/heroku-integration-service-mesh/conf"
@@ -73,7 +74,12 @@ func startServer(c *cli.Context) error {
 	)
 
 	router := NewRouter()
-	slog.Info("router running", slog.String("port", port))
+	slog.Info("Heroku Integration Service Mesh is up!", slog.String("port", port))
+
+	if len(config.YamlConfig.Authentication.BypassRoutes) > 0 {
+		slog.Warn("Authentication bypass routes: " + strings.Join(config.YamlConfig.Authentication.BypassRoutes, ", "))
+	}
+
 	return http.ListenAndServe(":"+port, router)
 }
 
