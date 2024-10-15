@@ -14,6 +14,56 @@ import (
 	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )
 
+func Test_ShouldBypassValidationAuthentication(t *testing.T) {
+	config := &conf.Config{
+		ShouldBypassAllRoutes: true,
+	}
+
+	shouldBypass := mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "")
+	if !shouldBypass {
+		t.Error("Should bypass ALL")
+	}
+
+	yamlConfig := &conf.YamlConfig{
+		Authentication: conf.Authentication{
+			BypassRoutes: []string{"/byPassMe"},
+		},
+	}
+	config = &conf.Config{
+		ShouldBypassAllRoutes: false,
+		YamlConfig:            yamlConfig,
+	}
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/byPassMe")
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/byPassMe/moreStuffHere")
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/byPassMe?moreStuffHere=true")
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/bypassme")
+	if shouldBypass {
+		t.Error("Should NOT have bypass")
+	}
+
+	yamlConfig = &conf.YamlConfig{}
+	config = &conf.Config{
+		ShouldBypassAllRoutes: false,
+		YamlConfig:            yamlConfig,
+	}
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/bypassme")
+	if shouldBypass {
+		t.Error("Should NOT have bypass")
+	}
+}
+
 func Test_SalesforceAuth(t *testing.T) {
 	herokuInvocationToken := "HerokuInvocationToken"
 	auth := "auth"

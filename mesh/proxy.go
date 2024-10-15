@@ -86,11 +86,9 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		LogInfo(requestID, "Processing request to "+apiPath+"...")
 
 		// Bypass ALL routes or incoming route?
-		shouldBypassValidationAuthentication := config.ShouldBypassAllRoutes ||
-			(len(config.YamlConfig.Authentication.BypassRoutes) > 0 &&
-				slices.Contains(config.YamlConfig.Authentication.BypassRoutes, apiPath))
+		shouldBypassValidationAuthentication := ShouldBypassValidationAuthentication(requestID, config, apiPath)
 		if shouldBypassValidationAuthentication {
-			LogWarn(requestID, "Bypassing authentication and validation for route "+apiPath)
+			LogWarn(requestID, "Bypassing validation and authentication for route "+apiPath)
 		}
 
 		// Get the request body from the incoming request
@@ -128,6 +126,29 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		forwardApiUrl, err := GetForwardUrl(config.AppUrl, config.AppPort, incomingReq)
 		ForwardRequestReplyToIncomingRequest(startTime, requestID, forwardApiUrl, incomingRespWriter, incomingReq, incomingReqBody)
 	}
+}
+
+func ShouldBypassValidationAuthentication(requestID string, config *conf.Config, apiPath string) bool {
+	if config.ShouldBypassAllRoutes {
+		LogWarn(requestID, "Bypassing authentication and validation for ALL routes")
+		return true
+	}
+
+	if len(config.YamlConfig.Authentication.BypassRoutes) == 0 {
+		return false
+	}
+
+	if slices.Contains(config.YamlConfig.Authentication.BypassRoutes, apiPath) {
+		return true
+	}
+
+	for _, value := range config.YamlConfig.Authentication.BypassRoutes {
+		if strings.HasPrefix(apiPath, value+"/") || strings.HasPrefix(apiPath, value+"?") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ValidateRequestHandler Validate request headers

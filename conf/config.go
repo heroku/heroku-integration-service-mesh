@@ -8,19 +8,22 @@ import (
 	"sync"
 
 	cli "github.com/urfave/cli/v2"
-	yaml "gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v3"
 )
 
 // Heroku Integration authentication API paths
 const (
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
 	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
+	YamlFileName                              = "heroku-integration-service-mesh.yaml"
 )
 
+type Authentication struct {
+	BypassRoutes []string `yaml:"bypassRoutes"`
+}
+
 type YamlConfig struct {
-	Authentication struct {
-		BypassRoutes []string `yaml:"bypassRoutes"`
-	}
+	Authentication Authentication
 }
 
 type Config struct {
@@ -60,8 +63,7 @@ var defaultConfig = sync.OnceValue(func() *Config {
 	shouldBypassAllRoutes, _ := strconv.ParseBool(shouldBypassAllRoutesConfigVar)
 
 	if herokuIntegrationUrl == "" || herokuIntegrationToken == "" {
-		fmt.Printf("Heroku Integration add-on config vars not set")
-		os.Exit(1)
+		log.Fatal("Heroku Integration add-on config vars not set")
 	}
 
 	if appPort == "" {
@@ -72,7 +74,10 @@ var defaultConfig = sync.OnceValue(func() *Config {
 		appUrl = "http://127.0.0.1"
 	}
 
-	yamlConfigInst := ParseYamlConfig()
+	yamlConfigInst, err := ParseYamlConfig(YamlFileName)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	return &Config{
 		AppPort:                            appPort,
@@ -89,23 +94,25 @@ var defaultConfig = sync.OnceValue(func() *Config {
 	}
 })
 
-func ParseYamlConfig() *YamlConfig {
+func ParseYamlConfig(yamlFileName string) (*YamlConfig, error) {
 	yamlConfig := &YamlConfig{}
 
-	if _, err := os.Stat("heroku-integration-service-mesh.yaml"); err == nil {
-		f, err := os.Open("heroku-integration-service-mesh.yaml")
+	if _, err := os.Stat(yamlFileName); err == nil {
+		yamlFile, err := os.Open(yamlFileName)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		defer f.Close()
+		defer yamlFile.Close()
 
-		decoder := yaml.NewDecoder(f)
+		decoder := yaml.NewDecoder(yamlFile)
+		decoder.KnownFields(true)
 		if err := decoder.Decode(&yamlConfig); err != nil {
-			log.Fatal(err)
+			fmt.Printf("yamlConfig err: %v", err)
+			return nil, err
 		}
 	}
-
-	return yamlConfig
+	fmt.Printf("yamlConfig: %v", yamlConfig)
+	return yamlConfig, nil
 }
 
 func GetConfig() *Config {
