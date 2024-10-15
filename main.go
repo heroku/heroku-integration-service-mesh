@@ -21,7 +21,7 @@ func main() {
 		Name:                   "heroku-integration-service-mesh",
 		Usage:                  "Service that handles validation and authentication between clients and Heroku apps",
 		UseShortOptionHandling: true,
-		Version:                fmt.Sprintf("%s [os: %s arch: %s]", VERSION, runtime.GOOS, runtime.GOARCH),
+		Version:                fmt.Sprintf("%s [os: %s, arch: %s]", config.Version, runtime.GOOS, runtime.GOARCH),
 		Action:                 startServer,
 		Flags:                  config.Flags(),
 	}
@@ -60,14 +60,16 @@ func startServer(c *cli.Context) error {
 
 	port := c.String("port")
 
+	config := conf.GetConfig()
+
 	slog.Info("environment",
 		slog.String("go_version:", runtime.Version()),
 		slog.String("os", runtime.GOOS),
 		slog.String("arch", runtime.GOARCH),
 		slog.String("http_port", port),
-		slog.String("version", VERSION),
+		slog.String("version", config.Version),
 		slog.String("environment", env),
-		slog.String("app_port", conf.GetConfig().AppPort),
+		slog.String("app_port", config.AppPort),
 	)
 
 	router := NewRouter()

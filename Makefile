@@ -15,7 +15,7 @@ help: ## show this
 	@grep -E '^[ a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: | fmt vet bin/heroku-integration-service-mesh
+build: | fmt vet test bin/heroku-integration-service-mesh
 	$(info $(M) done)
 
 .PHONY: lint
@@ -26,7 +26,13 @@ lint: ## run go linters
 
 .PHONY: test
 test: ## run all of the test cases
-	$(Q) go test ./... -coverpkg=./... -coverprofile ./coverage.out
+	$(info $(M) testing …)
+	$(Q) go test ./test/*.go
+
+.PHONY: test_coverage
+test_coverage: ## run all of the test cases
+	$(info $(M) test_coverage …)
+	$(Q) go test -v ./test/*.go -coverpkg=./... -coverprofile ./coverage.out
 	go tool cover -func ./coverage.out
 
 .PHONY: fmt

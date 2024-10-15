@@ -1,0 +1,4 @@
+authentication:
+  bypassRoutes:
+    - /bypassThisRoute
+    - /bypassThatRoute

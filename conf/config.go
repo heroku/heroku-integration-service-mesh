@@ -2,10 +2,13 @@ package conf
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	cli "github.com/urfave/cli/v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 // Heroku Integration authentication API paths
@@ -14,14 +17,24 @@ const (
 	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
 )
 
+type YamlConfig struct {
+	Authentication struct {
+		BypassRoutes []string `yaml:"bypassRoutes"`
+	}
+}
+
 type Config struct {
-	PublicPort                                string
-	PrivatePort                               string
 	AppPort                                   string
+	AppUrl                                    string
 	HerokuInvocationToken                     string
 	HerokuIntegrationUrl                      string
 	HerokuInvocationSalesforceAuthPath        string
 	HerokuIntegrationDataActionTargetAuthPath string
+	PrivatePort                               string
+	PublicPort                                string
+	ShouldBypassAllRoutes                     bool
+	Version                                   string
+	YamlConfig                                *YamlConfig
 }
 
 func (c *Config) Flags() []cli.Flag {
@@ -40,8 +53,11 @@ func (c *Config) Flags() []cli.Flag {
 var defaultConfig = sync.OnceValue(func() *Config {
 
 	appPort := os.Getenv("APP_PORT")
+	appUrl := os.Getenv("APP_URL")
 	herokuIntegrationToken := os.Getenv("HEROKU_INTEGRATION_TOKEN")
 	herokuIntegrationUrl := os.Getenv("HEROKU_INTEGRATION_API_URL")
+	shouldBypassAllRoutesConfigVar := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_BYPASS_ALL_ROUTES")
+	shouldBypassAllRoutes, _ := strconv.ParseBool(shouldBypassAllRoutesConfigVar)
 
 	if herokuIntegrationUrl == "" || herokuIntegrationToken == "" {
 		fmt.Printf("Heroku Integration add-on config vars not set")
@@ -52,16 +68,45 @@ var defaultConfig = sync.OnceValue(func() *Config {
 		appPort = "3000"
 	}
 
+	if appUrl == "" {
+		appUrl = "http://127.0.0.1"
+	}
+
+	yamlConfigInst := ParseYamlConfig()
+
 	return &Config{
-		PublicPort:                         "8070",
-		PrivatePort:                        "8071",
 		AppPort:                            appPort,
+		AppUrl:                             appUrl,
 		HerokuInvocationToken:              herokuIntegrationToken,
 		HerokuIntegrationUrl:               herokuIntegrationUrl,
 		HerokuInvocationSalesforceAuthPath: HerokuIntegrationSalesforceAuthPath,
 		HerokuIntegrationDataActionTargetAuthPath: HerokuIntegrationDataActionTargetAuthPath,
+		PrivatePort:           "8071",
+		PublicPort:            "8070",
+		ShouldBypassAllRoutes: shouldBypassAllRoutes,
+		Version:               VERSION,
+		YamlConfig:            yamlConfigInst,
 	}
 })
+
+func ParseYamlConfig() *YamlConfig {
+	yamlConfig := &YamlConfig{}
+
+	if _, err := os.Stat("heroku-integration-service-mesh.yaml"); err == nil {
+		f, err := os.Open("heroku-integration-service-mesh.yaml")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+
+		decoder := yaml.NewDecoder(f)
+		if err := decoder.Decode(&yamlConfig); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	return yamlConfig
+}
 
 func GetConfig() *Config {
 	return defaultConfig()
