@@ -1,7 +1,6 @@
 package conf
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -53,6 +52,7 @@ func (c *Config) Flags() []cli.Flag {
 	}
 }
 
+// TODO: Make customer configurable items configurable in service mesh's YAML file
 var defaultConfig = sync.OnceValue(func() *Config {
 
 	appPort := os.Getenv("APP_PORT")
@@ -107,7 +107,6 @@ func ParseYamlConfig(yamlFileName string) (*YamlConfig, error) {
 		decoder := yaml.NewDecoder(yamlFile)
 		decoder.KnownFields(true)
 		if err := decoder.Decode(&yamlConfig); err != nil {
-			fmt.Printf("yamlConfig err: %v", err)
 			return nil, err
 		}
 	}

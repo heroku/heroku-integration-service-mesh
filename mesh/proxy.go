@@ -79,7 +79,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		if requestID == "" {
 			requestID = uuid.New().String()
 			incomingRespWriter.Header().Set(HdrNameRequestID, requestID)
-			LogWarn(requestID, HdrNameRequestID+" not found! Generated and set "+requestID)
+			LogWarn(requestID, "Generated "+HdrNameRequestID+" header")
 		}
 
 		// Log request
@@ -150,6 +150,10 @@ func ShouldBypassValidationAuthentication(requestID string, config *conf.Config,
 		if strings.HasSuffix(value, "*") && strings.HasPrefix(apiPath, value[0:(len(value)-1)]) {
 			return true
 		}
+	}
+
+	if apiPath == HealthcheckRoute {
+		return true
 	}
 
 	return false

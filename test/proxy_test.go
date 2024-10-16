@@ -77,6 +77,11 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 	if shouldBypass {
 		t.Error("Should NOT have bypass")
 	}
+
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, mesh.HealthcheckRoute)
+	if shouldBypass {
+		t.Error("Should NOT have bypass")
+	}
 }
 
 func Test_SalesforceAuth(t *testing.T) {
