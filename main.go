@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	slogenv "github.com/cbrewster/slog-env"
 	"github.com/heroku/heroku-integration-service-mesh/conf"
@@ -21,7 +22,7 @@ func main() {
 		Name:                   "heroku-integration-service-mesh",
 		Usage:                  "Service that handles validation and authentication between clients and Heroku apps",
 		UseShortOptionHandling: true,
-		Version:                fmt.Sprintf("%s [os: %s arch: %s]", VERSION, runtime.GOOS, runtime.GOARCH),
+		Version:                fmt.Sprintf("%s [os: %s, arch: %s]", config.Version, runtime.GOOS, runtime.GOARCH),
 		Action:                 startServer,
 		Flags:                  config.Flags(),
 	}
@@ -60,18 +61,26 @@ func startServer(c *cli.Context) error {
 
 	port := c.String("port")
 
+	config := conf.GetConfig()
+
 	slog.Info("environment",
 		slog.String("go_version:", runtime.Version()),
 		slog.String("os", runtime.GOOS),
 		slog.String("arch", runtime.GOARCH),
 		slog.String("http_port", port),
-		slog.String("version", VERSION),
+		slog.String("version", config.Version),
 		slog.String("environment", env),
-		slog.String("app_port", conf.GetConfig().AppPort),
+		slog.String("app_host", config.YamlConfig.App.Host),
+		slog.String("app_port", config.YamlConfig.App.Port),
 	)
 
 	router := NewRouter()
-	slog.Info("router running", slog.String("port", port))
+	slog.Info("Heroku Integration Service Mesh is up!", slog.String("port", port))
+
+	if len(config.YamlConfig.Mesh.Authentication.BypassRoutes) > 0 {
+		slog.Warn("Authentication bypass routes: " + strings.Join(config.YamlConfig.Mesh.Authentication.BypassRoutes, ", "))
+	}
+
 	return http.ListenAndServe(":"+port, router)
 }
 
