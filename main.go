@@ -70,14 +70,15 @@ func startServer(c *cli.Context) error {
 		slog.String("http_port", port),
 		slog.String("version", config.Version),
 		slog.String("environment", env),
-		slog.String("app_port", config.AppPort),
+		slog.String("app_host", config.YamlConfig.App.Host),
+		slog.String("app_port", config.YamlConfig.App.Port),
 	)
 
 	router := NewRouter()
 	slog.Info("Heroku Integration Service Mesh is up!", slog.String("port", port))
 
-	if len(config.YamlConfig.Authentication.BypassRoutes) > 0 {
-		slog.Warn("Authentication bypass routes: " + strings.Join(config.YamlConfig.Authentication.BypassRoutes, ", "))
+	if len(config.YamlConfig.Mesh.Authentication.BypassRoutes) > 0 {
+		slog.Warn("Authentication bypass routes: " + strings.Join(config.YamlConfig.Mesh.Authentication.BypassRoutes, ", "))
 	}
 
 	return http.ListenAndServe(":"+port, router)

@@ -1,4 +1,5 @@
-authentication:
-  bypassRoutes:
-    - /bypassThisRoute
-    - /bypassThatRoute
+mesh:
+  authentication:
+    bypassRoutes:
+      - /bypassThisRoute
+      - /bypassThatRoute

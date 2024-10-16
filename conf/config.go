@@ -12,6 +12,9 @@ import (
 
 // Heroku Integration authentication API paths
 const (
+	AppPort                                   = "3000"
+	AppHost                                   = "http://127.0.0.1"
+	HealthCheckRoute                          = "/healthcheck"
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
 	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
 	YamlFileName                              = "heroku-integration-service-mesh.yaml"
@@ -21,13 +24,27 @@ type Authentication struct {
 	BypassRoutes []string `yaml:"bypassRoutes"`
 }
 
+type HealthCheck struct {
+	Enable string `yaml:"enable"`
+	Route  string `yaml:"route"`
+}
+
+type App struct {
+	Port string `yaml:"port"`
+	Host string `yaml:"host"`
+}
+
+type Mesh struct {
+	Authentication Authentication `yaml:"authentication"`
+	HealthCheck    HealthCheck    `yaml:"healthcheck"`
+}
+
 type YamlConfig struct {
-	Authentication Authentication
+	App  App  `yaml:"app"`
+	Mesh Mesh `yaml:"mesh"`
 }
 
 type Config struct {
-	AppPort                                   string
-	AppUrl                                    string
 	HerokuInvocationToken                     string
 	HerokuIntegrationUrl                      string
 	HerokuInvocationSalesforceAuthPath        string
@@ -55,8 +72,7 @@ func (c *Config) Flags() []cli.Flag {
 // TODO: Make customer configurable items configurable in service mesh's YAML file
 var defaultConfig = sync.OnceValue(func() *Config {
 
-	appPort := os.Getenv("APP_PORT")
-	appUrl := os.Getenv("APP_URL")
+	// Get env config
 	herokuIntegrationToken := os.Getenv("HEROKU_INTEGRATION_TOKEN")
 	herokuIntegrationUrl := os.Getenv("HEROKU_INTEGRATION_API_URL")
 	shouldBypassAllRoutesConfigVar := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_BYPASS_ALL_ROUTES")
@@ -66,49 +82,64 @@ var defaultConfig = sync.OnceValue(func() *Config {
 		log.Fatal("Heroku Integration add-on config vars not set")
 	}
 
-	if appPort == "" {
-		appPort = "3000"
-	}
-
-	if appUrl == "" {
-		appUrl = "http://127.0.0.1"
-	}
-
-	yamlConfigInst, err := ParseYamlConfig(YamlFileName)
+	yamlConfig, err := InitYamlConfig(YamlFileName)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Invalid YAML config: %v", err)
 	}
 
 	return &Config{
-		AppPort:                            appPort,
-		AppUrl:                             appUrl,
-		HerokuInvocationToken:              herokuIntegrationToken,
-		HerokuIntegrationUrl:               herokuIntegrationUrl,
-		HerokuInvocationSalesforceAuthPath: HerokuIntegrationSalesforceAuthPath,
+		HerokuInvocationToken:                     herokuIntegrationToken,
+		HerokuIntegrationUrl:                      herokuIntegrationUrl,
+		HerokuInvocationSalesforceAuthPath:        HerokuIntegrationSalesforceAuthPath,
 		HerokuIntegrationDataActionTargetAuthPath: HerokuIntegrationDataActionTargetAuthPath,
 		PrivatePort:           "8071",
 		PublicPort:            "8070",
 		ShouldBypassAllRoutes: shouldBypassAllRoutes,
 		Version:               VERSION,
-		YamlConfig:            yamlConfigInst,
+		YamlConfig:            yamlConfig,
 	}
 })
 
-func ParseYamlConfig(yamlFileName string) (*YamlConfig, error) {
+func InitYamlConfig(yamlFileName string) (*YamlConfig, error) {
 	yamlConfig := &YamlConfig{}
 
-	if _, err := os.Stat(yamlFileName); err == nil {
-		yamlFile, err := os.Open(yamlFileName)
-		if err != nil {
-			return nil, err
-		}
-		defer yamlFile.Close()
+	// Parse YAML file, if found
+	_, err := os.Stat(yamlFileName)
+	if err != nil {
+		return nil, err
+	}
 
-		decoder := yaml.NewDecoder(yamlFile)
-		decoder.KnownFields(true)
-		if err := decoder.Decode(&yamlConfig); err != nil {
-			return nil, err
-		}
+	yamlFile, err := os.Open(yamlFileName)
+	if err != nil {
+		return nil, err
+	}
+	defer yamlFile.Close()
+
+	decoder := yaml.NewDecoder(yamlFile)
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&yamlConfig); err != nil {
+		return nil, err
+	}
+
+	// Apply defaults
+	if yamlConfig.App.Port == "" {
+		yamlConfig.App.Port = AppPort
+	}
+	appPort := os.Getenv("APP_PORT")
+	if appPort != "" {
+		yamlConfig.App.Port = appPort
+	}
+
+	if yamlConfig.App.Host == "" {
+		yamlConfig.App.Host = AppHost
+	}
+
+	if yamlConfig.Mesh.HealthCheck.Enable == "" {
+		yamlConfig.Mesh.HealthCheck.Enable = "true"
+	}
+
+	if yamlConfig.Mesh.HealthCheck.Route == "" {
+		yamlConfig.Mesh.HealthCheck.Route = HealthCheckRoute
 	}
 
 	return yamlConfig, nil

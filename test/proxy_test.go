@@ -25,8 +25,13 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 	}
 
 	yamlConfig := &conf.YamlConfig{
-		Authentication: conf.Authentication{
-			BypassRoutes: []string{"/byPassMe", "/favicon*"},
+		Mesh: conf.Mesh{
+			Authentication: conf.Authentication{
+				BypassRoutes: []string{"/byPassMe", "/favicon*"},
+			},
+			HealthCheck: conf.HealthCheck{
+				Enable: "false",
+			},
 		},
 	}
 	config = &conf.Config{
@@ -65,7 +70,7 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 
 	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/bypassme")
 	if shouldBypass {
-		t.Error("Should NOT have bypass")
+		t.Error("Should NOT bypass")
 	}
 
 	yamlConfig = &conf.YamlConfig{}
@@ -75,12 +80,46 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 	}
 	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, "/bypassme")
 	if shouldBypass {
-		t.Error("Should NOT have bypass")
+		t.Error("Should NOT bypass")
 	}
 
-	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, mesh.HealthcheckRoute)
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, conf.HealthCheckRoute)
 	if shouldBypass {
-		t.Error("Should NOT have bypass")
+		t.Error("Should NOT bypass")
+	}
+
+	yamlConfig = &conf.YamlConfig{
+		Mesh: conf.Mesh{
+			HealthCheck: conf.HealthCheck{
+				Enable: "true",
+				Route:  "/healthcheck",
+			},
+		},
+	}
+	config = &conf.Config{
+		ShouldBypassAllRoutes: false,
+		YamlConfig:            yamlConfig,
+	}
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, yamlConfig.Mesh.HealthCheck.Route)
+	if !shouldBypass {
+		t.Error("Should bypass")
+	}
+
+	yamlConfig = &conf.YamlConfig{
+		Mesh: conf.Mesh{
+			HealthCheck: conf.HealthCheck{
+				Enable: "false",
+				Route:  "/healthcheck",
+			},
+		},
+	}
+	config = &conf.Config{
+		ShouldBypassAllRoutes: false,
+		YamlConfig:            yamlConfig,
+	}
+	shouldBypass = mesh.ShouldBypassValidationAuthentication(MockRequestID, config, yamlConfig.Mesh.HealthCheck.Route)
+	if shouldBypass {
+		t.Error("Should NOT bypass")
 	}
 }
 
@@ -280,9 +319,14 @@ func Test_ForwardRequestSendResponse(t *testing.T) {
 	defer server.Close()
 
 	urlParts := strings.Split(server.URL, ":")
+	yamlConfig := &conf.YamlConfig{
+		App: conf.App{
+			Host: urlParts[0] + ":" + urlParts[1],
+			Port: urlParts[2],
+		},
+	}
 	config := &conf.Config{
-		AppPort: urlParts[2],
-		AppUrl:  urlParts[0] + ":" + urlParts[1],
+		YamlConfig: yamlConfig,
 	}
 	jsonData := []byte(`{"name": "John", "age": 30}`)
 	incomingReq, err := http.NewRequest("POST", apiPath, bytes.NewReader(jsonData))
@@ -295,7 +339,7 @@ func Test_ForwardRequestSendResponse(t *testing.T) {
 	incomingReq.Header.Set("Content-Type", "application/json")
 	incomingRespWriter := httptest.NewRecorder()
 
-	forwardApiUrl, err := mesh.GetForwardUrl(config.AppUrl, config.AppPort, incomingReq)
+	forwardApiUrl, err := mesh.GetForwardUrl(config.YamlConfig.App.Host, config.YamlConfig.App.Port, incomingReq)
 	mesh.ForwardRequestReplyToIncomingRequest(time.Now(), MockRequestID, forwardApiUrl, incomingRespWriter, incomingReq, jsonData)
 	if err != nil {
 		t.Fatal(err)

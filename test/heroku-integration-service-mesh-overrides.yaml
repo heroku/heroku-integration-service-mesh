@@ -1,0 +1,7 @@
+mesh:
+  authentication:
+  healthcheck:
+    enable: false
+app:
+  port: 3030
+  host: "https://mesh"

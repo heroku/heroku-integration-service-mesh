@@ -42,8 +42,8 @@ func NewRoutes() *Routes {
 	return &Routes{http.DefaultTransport}
 }
 
-func GetForwardUrl(appUrl string, appPort string, forwardApiPath *http.Request) (string, error) {
-	url := fmt.Sprintf("%s:%s%s", appUrl, appPort, forwardApiPath.URL.RequestURI())
+func GetForwardUrl(host string, port string, forwardApiPath *http.Request) (string, error) {
+	url := fmt.Sprintf("%s:%s%s", host, port, forwardApiPath.URL.RequestURI())
 	return url, nil
 }
 
@@ -123,7 +123,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		}
 
 		// Forward request to target API; send response to incoming request
-		forwardApiUrl, err := GetForwardUrl(config.AppUrl, config.AppPort, incomingReq)
+		forwardApiUrl, err := GetForwardUrl(config.YamlConfig.App.Host, config.YamlConfig.App.Port, incomingReq)
 		ForwardRequestReplyToIncomingRequest(startTime, requestID, forwardApiUrl, incomingRespWriter, incomingReq, incomingReqBody)
 	}
 }
@@ -134,25 +134,24 @@ func ShouldBypassValidationAuthentication(requestID string, config *conf.Config,
 		return true
 	}
 
-	if len(config.YamlConfig.Authentication.BypassRoutes) == 0 {
-		return false
-	}
-
-	if slices.Contains(config.YamlConfig.Authentication.BypassRoutes, apiPath) {
-		return true
-	}
-
-	for _, value := range config.YamlConfig.Authentication.BypassRoutes {
-		if strings.HasPrefix(apiPath, value+"?") {
+	yamlConfig := config.YamlConfig
+	if len(yamlConfig.Mesh.Authentication.BypassRoutes) > 0 {
+		if slices.Contains(yamlConfig.Mesh.Authentication.BypassRoutes, apiPath) {
 			return true
 		}
 
-		if strings.HasSuffix(value, "*") && strings.HasPrefix(apiPath, value[0:(len(value)-1)]) {
-			return true
+		for _, value := range yamlConfig.Mesh.Authentication.BypassRoutes {
+			if strings.HasPrefix(apiPath, value+"?") {
+				return true
+			}
+
+			if strings.HasSuffix(value, "*") && strings.HasPrefix(apiPath, value[0:(len(value)-1)]) {
+				return true
+			}
 		}
 	}
 
-	if apiPath == HealthcheckRoute {
+	if yamlConfig.Mesh.HealthCheck.Enable == "true" && apiPath == yamlConfig.Mesh.HealthCheck.Route {
 		return true
 	}
 
