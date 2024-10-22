@@ -1,4 +1,4 @@
-package test
+package mesh
 
 import (
 	"encoding/base64"

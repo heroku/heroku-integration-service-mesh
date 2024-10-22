@@ -27,18 +27,18 @@ lint: ## run go linters
 .PHONY: test
 test: ## run all of the test cases
 	$(info $(M) testing …)
-	$(Q) go test ./test/*.go
+	$(Q) go test ./test/**
 
 .PHONY: test-coverage
 test-coverage: ## run all of the test cases with code coverage
 	$(info $(M) test-coverage …)
-	$(Q) go test -v ./test/*.go -coverpkg=./... -coverprofile ./coverage.out
+	$(Q) go test -v ./test/** -coverpkg=./... -coverprofile ./coverage.out
 	go tool cover -func ./coverage.out
 
 .PHONY: test-fmt
 test-fmt: ## run all of the test cases with formatting (requires https://github.com/GoTestTools/gotestfmt)
 	$(info $(M) test-fmt …)
-	$(Q) go test -json -v ./test/*.go 2>&1 | tee /tmp/heroku-integration-service-mesh-gotestfmt.log | gotestfmt
+	$(Q) go test -json -v ./test/** 2>&1 | tee /tmp/heroku-integration-service-mesh-gotestfmt.log | gotestfmt
 
 .PHONY: fmt
 fmt: ## run go fmt on all source files
