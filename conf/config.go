@@ -105,20 +105,19 @@ func InitYamlConfig(yamlFileName string) (*YamlConfig, error) {
 
 	// Parse YAML file, if found
 	_, err := os.Stat(yamlFileName)
-	if err != nil {
-		return nil, err
-	}
+	if err == nil {
+		// Found
+		yamlFile, err := os.Open(yamlFileName)
+		if err != nil {
+			return nil, err
+		}
+		defer yamlFile.Close()
 
-	yamlFile, err := os.Open(yamlFileName)
-	if err != nil {
-		return nil, err
-	}
-	defer yamlFile.Close()
-
-	decoder := yaml.NewDecoder(yamlFile)
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&yamlConfig); err != nil {
-		return nil, err
+		decoder := yaml.NewDecoder(yamlFile)
+		decoder.KnownFields(true)
+		if err := decoder.Decode(&yamlConfig); err != nil {
+			return nil, err
+		}
 	}
 
 	// Apply defaults
@@ -146,5 +145,9 @@ func InitYamlConfig(yamlFileName string) (*YamlConfig, error) {
 }
 
 func GetConfig() *Config {
+	return defaultConfig()
+}
+
+func GetConfigWithYamlFile() *Config {
 	return defaultConfig()
 }
