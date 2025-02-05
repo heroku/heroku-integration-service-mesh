@@ -1,3 +1,5 @@
 .idea
+.DS_Store
 heroku-integration-service-mesh.tar.gz
 coverage.out
+bin/**
