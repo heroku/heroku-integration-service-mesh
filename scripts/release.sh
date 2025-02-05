@@ -69,4 +69,4 @@ if ! git push origin "$release_tag"; then
     exit 1
 fi
 
-echo "Release $release_tag created on $sha and pushed successfully. Check https://github.com/heroku/heroku-integration-service-mesh/actions/workflows/release.yml for release status."
+echo "Release $release_tag created on commit $sha and pushed successfully. Check https://github.com/heroku/heroku-integration-service-mesh/actions/workflows/release.yml for GH Action status."
