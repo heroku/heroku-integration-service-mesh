@@ -59,6 +59,6 @@ bin/%: $(SRC_FILES)
 	$(info $(M) building $@ …)
 	$(Q) $(CC) -o $@ github.com/heroku/heroku-integration-service-mesh
 
-release: | build ## run to generate and tar heroku-integration-service-mesh binary
+tar-gz: | build ## build and tar the binary
 	$(info $(M) tar heroku-integration-service-mesh ...)
 	$(Q) tar -zcvf heroku-integration-service-mesh.tar.gz -C bin heroku-integration-service-mesh
