@@ -3,7 +3,7 @@ SRC_FILES := $(shell find . -name '*.go')
 GO_MOD := $(go list -m)
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 PATH := $(ROOT_DIR)/bin:$(ROOT_DIR)/.local/bin:$(GOPATH)/bin:$(PATH)
-CC = env PATH=$(PATH) go build -ldflags '$(LD_FLAGS)'
+CC = env PATH=$(PATH) go build -ldflags '$(LD_FLAGS)' -trimpath
 
 # Formatting/Display
 Q:=$(if $(filter 1,$(VERBOSE)),,@)
