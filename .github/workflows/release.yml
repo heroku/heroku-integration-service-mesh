@@ -7,7 +7,6 @@ on:
 
 jobs:
   build:
-    # change runner when using a public repo. See https://salesforce.quip.com/bu6UA0KImOxJ
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
