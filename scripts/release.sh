@@ -17,9 +17,9 @@ if ! [[ $release_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
-# Ensure a SHA is provided
+# Ensure a commit SHA is provided
 if [[ -z "$sha" ]]; then
-    echo "Error: SHA must be provided."
+    echo "Error: commit SHA to tag against must be provided."
     exit 1
 fi
 
@@ -29,20 +29,20 @@ if ! grep -qc "var VERSION = \"$release_tag\"" conf/version.go; then
     exit 1
 fi
 
-# Ensure we are on the main branch
+# Ensure we are on the main branch since release is tagged on main
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 if [[ "$current_branch" != "main" ]]; then
     echo "Error: Must switch to main branch"
     exit 1
 fi
 
-# Ensure there are no local changes
+# Ensure there are no local changes to repo since direct commits to main is blocked.
 if ! git diff-index --quiet HEAD --; then
-    echo "Error: You have uncommitted changes. Please commit or stash them before proceeding."
+    echo "Error: You have uncommitted changes. Please commit to branch or stash them before proceeding."
     exit 1
 fi
 
-# Check if the tag already exists
+# Check if the release tag already exists
 if git rev-parse "$release_tag" >/dev/null 2>&1; then
     echo "Error: Tag $release_tag already exists in repo. Please use a new version number."
     exit 1
