@@ -3,7 +3,7 @@ SRC_FILES := $(shell find . -name '*.go')
 GO_MOD := $(go list -m)
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 PATH := $(ROOT_DIR)/bin:$(ROOT_DIR)/.local/bin:$(GOPATH)/bin:$(PATH)
-CC = env PATH=$(PATH) go build -ldflags '$(LD_FLAGS)'
+CC = env PATH=$(PATH) go build -ldflags '$(LD_FLAGS)' -trimpath
 
 # Formatting/Display
 Q:=$(if $(filter 1,$(VERBOSE)),,@)
@@ -59,6 +59,18 @@ bin/%: $(SRC_FILES)
 	$(info $(M) building $@ …)
 	$(Q) $(CC) -o $@ github.com/heroku/heroku-integration-service-mesh
 
-release: | build ## run to generate and tar heroku-integration-service-mesh binary
+tar-gz: | build ## build and tar the binary
 	$(info $(M) tar heroku-integration-service-mesh ...)
 	$(Q) tar -zcvf heroku-integration-service-mesh.tar.gz -C bin heroku-integration-service-mesh
+
+release: ## create release tag and push to github to trigger release. Specify VERSION=vX.Y.Z and SHA=abcd123
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: Version must be specified. Usage: make release VERSION=vX.Y.Z SHA=1234abc"; \
+		exit 1; \
+	fi
+	@if [ -z "$(SHA)" ]; then \
+		echo "Error: commit SHA must be specified. Usage: make release VERSION=vX.Y.Z SHA=1234abc"; \
+		exit 1; \
+    fi
+	$(info $(M) create release tag and push to github to trigger release)
+	$(Q) scripts/release.sh $(VERSION) $(SHA)

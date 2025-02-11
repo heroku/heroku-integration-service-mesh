@@ -1,0 +1,19 @@
+name: Release New Version
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate tar-gz
+        run: make tar-gz
+      - name: Cut new Github Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: heroku-integration-service-mesh.tar.gz

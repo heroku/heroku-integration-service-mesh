@@ -71,22 +71,19 @@ time=2024-09-30T16:01:54.865-06:00 level=ERROR msg="400 Invalid request" app=loc
 
 ### Release
 
-1. Update `version.go` bumping up appropriate major, minor, or patch version.
-2. On [heroku/heroku-integration-service repo](https://github.com/heroku/heroku-integration-service-mesh/releases), follow [Create a release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository#creating-a-release) instructions to create a release.
-3. Run `make release` to build and generate `heroku-integration-service-mesh.tar.gz` tar file.
+1. Update `conf/version.go` bumping up appropriate major, minor, or patch version (vX.Y.Z) via PR.
+1. Once your PR is merged, switch to the main branch `git checkout main`. 
+1. Get the commit SHA of your merged PR on main.
+1. Run `make release VERSION=vX.Y.Z SHA=1234ab` This runs `scripts/release.sh` which contains some sanity checks. 
+1. Confirm that you want to proceed after sanity checks pass. The script creates and pushes a tag to the repo which triggers the Github Action in `.github/workflows/release.yml`.
 ```shell
-$ make release
-▶ formatting …
-▶ vetting …
-▶ testing …
-ok      command-line-arguments  0.009s
-▶ building bin/heroku-integration-service-mesh …
-▶ done
-▶ tar heroku-integration-service-mesh ...
-heroku-integration-service-mesh
-
-$ ls -l heroku-integration-service-mesh.tar.gz 
--rw-rw-r-- 1 cwall cwall 6.7M Sep 30 15:25 heroku-integration-service-mesh.tar.gz
+% make release VERSION=v0.0.3 SHA=1234abc
+▶ create release tag and push to github to trigger release
+All Pre-checks passed. Release version v0.0.3 at commit 1234abc? (y/N) y
+...
+To https://github.com/heroku/heroku-integration-service-mesh.git
+ * [new tag]         v0.0.3 -> v0.0.3
+Release v0.0.3 created on commit 1234abc and pushed successfully. Check https://github.com/heroku/heroku-integration-service-mesh/actions/workflows/release.yml for GH Action status.
 ```
-4. Upload `heroku-integration-service-mesh.tar.gz` as release artifact.
+
 5. Run buildpack locally to validate download and install.  See [Heroku Buildpack for Heroku Integration Service Mesh - Run Locally](https://github.com/heroku/heroku-buildpack-heroku-integration-service-mesh?tab=readme-ov-file#run-locally).
