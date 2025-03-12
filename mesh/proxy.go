@@ -353,8 +353,13 @@ func ForwardRequestReplyToIncomingRequest(
 	// Log time took to evaluate request and forward to API
 	TimeTrack(requestID, startTime, "Heroku Integration Service Mesh")
 
-	// Copy API's response to incoming response
-	ReplyToIncomingRequest(requestID, forwardResp, incomingRespWriter)
+	// If the request failed to be forwarded to the application, the ForwardRequest function below
+	// will have already written the error to incomingRespWriter. In that scenario, forwardResp
+	// will be nil, so we can just ignore it
+	if forwardResp != nil {
+		// Copy API's response to incoming response
+		ReplyToIncomingRequest(requestID, forwardResp, incomingRespWriter)
+	}
 }
 
 // ForwardRequest Forward request to target API
