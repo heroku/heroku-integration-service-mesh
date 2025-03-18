@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -343,5 +344,31 @@ func Test_ForwardRequestSendResponse(t *testing.T) {
 	mesh.ForwardRequestReplyToIncomingRequest(time.Now(), MockRequestID, forwardApiUrl, incomingRespWriter, incomingReq, jsonData)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func Test_ForwardRequestToUnavailableService(t *testing.T) {
+	apiPath := "/my-api"
+
+	jsonData := []byte(`{"name": "John", "age": 30}`)
+	incomingReq, err := http.NewRequest("POST", apiPath, bytes.NewReader(jsonData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	incomingReq.Header.Set(mesh.HdrNameRequestID, MockRequestID)
+	incomingReq.Header.Set(mesh.HdrRequestContext, mesh.HdrRequestContext)
+	incomingReq.Header.Set(mesh.HdrClientContext, MockRequestID)
+	incomingReq.Header.Set("Content-Type", "application/json")
+	incomingRespWriter := httptest.NewRecorder()
+
+	invalidServerUrl := "invalid"
+
+	mesh.ForwardRequestReplyToIncomingRequest(time.Now(), MockRequestID, invalidServerUrl, incomingRespWriter, incomingReq, jsonData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	responseStatus := incomingRespWriter.Result().StatusCode
+	if responseStatus != http.StatusBadGateway {
+		t.Fatal(fmt.Errorf("unexpected response for an invalid forward URL. Expected: %d, actual %d", http.StatusBadGateway, responseStatus))
 	}
 }
