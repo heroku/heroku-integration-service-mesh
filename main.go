@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	slogenv "github.com/cbrewster/slog-env"
-	"github.com/heroku/heroku-integration-service-mesh/conf"
+	"github.com/heroku/heroku-applink-service-mesh/conf"
 	cli "github.com/urfave/cli/v2"
 )
 
@@ -19,7 +19,7 @@ func main() {
 	config := conf.GetConfig()
 
 	app := &cli.App{
-		Name:                   "heroku-integration-service-mesh",
+		Name:                   "heroku-applink-service-mesh",
 		Usage:                  "Service that handles validation and authentication between clients and Heroku apps",
 		UseShortOptionHandling: true,
 		Version:                fmt.Sprintf("%s [os: %s, arch: %s]", config.Version, runtime.GOOS, runtime.GOARCH),
@@ -75,7 +75,7 @@ func startServer(c *cli.Context) error {
 	)
 
 	router := NewRouter()
-	slog.Info("Heroku Integration Service Mesh is up!", slog.String("port", port))
+	slog.Info("Heroku AppLink Service Mesh is up!", slog.String("port", port))
 
 	if len(config.YamlConfig.Mesh.Authentication.BypassRoutes) > 0 {
 		slog.Warn("Authentication bypass routes: " + strings.Join(config.YamlConfig.Mesh.Authentication.BypassRoutes, ", "))
@@ -93,7 +93,7 @@ func setEnvDefault(key, fallback string) {
 func setDefaultLogger() {
 	logger := slog.New(slogenv.NewHandler(slog.NewTextHandler(os.Stderr, nil)).WithAttrs([]slog.Attr{
 		slog.String("app", os.Getenv("HEROKU_APP_NAME")),
-		slog.String("source", "heroku-integration-service-mesh"),
+		slog.String("source", "heroku-applink-service-mesh"),
 	}))
 	slog.SetDefault(logger)
 }

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/heroku/heroku-integration-service-mesh/conf"
-	"github.com/heroku/heroku-integration-service-mesh/mesh"
+	"github.com/heroku/heroku-applink-service-mesh/conf"
+	"github.com/heroku/heroku-applink-service-mesh/mesh"
 )
 
 func Test_ShouldBypassValidationAuthentication(t *testing.T) {
@@ -129,8 +129,8 @@ func Test_SalesforceAuth(t *testing.T) {
 	auth := "auth"
 
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != conf.HerokuIntegrationSalesforceAuthPath {
-			t.Errorf("Expected to request path "+conf.HerokuIntegrationSalesforceAuthPath+", got '%s'", request.URL.Path)
+		if request.URL.Path != conf.HerokuApplinkSalesforceAuthPath {
+			t.Errorf("Expected to request path '%s', got '%s'", conf.HerokuApplinkSalesforceAuthPath, request.URL.Path)
 		}
 
 		if request.Method != "POST" {
@@ -171,9 +171,10 @@ func Test_SalesforceAuth(t *testing.T) {
 	defer server.Close()
 
 	config := &conf.Config{
-		HerokuIntegrationUrl:               server.URL,
-		HerokuInvocationToken:              herokuInvocationToken,
-		HerokuInvocationSalesforceAuthPath: conf.HerokuIntegrationSalesforceAuthPath,
+		HerokuApplinkUrl:                      server.URL,
+		HerokuInvocationToken:                 herokuInvocationToken,
+		HerokuApplinkSalesforceAuthPath:       conf.HerokuApplinkSalesforceAuthPath,
+		HerokuApplinkDataActionTargetAuthPath: conf.HerokuApplinkDataActionTargetAuthPath,
 	}
 	requestHeader := &mesh.RequestHeader{
 		XRequestID: MockRequestID,
@@ -206,8 +207,8 @@ func Test_DataActionTargetAuth(t *testing.T) {
 	herokuInvocationToken := "HerokuInvocationToken"
 
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != conf.HerokuIntegrationDataActionTargetAuthPath {
-			t.Errorf("Expected to request path "+conf.HerokuIntegrationDataActionTargetAuthPath+", got '%s'", request.URL.Path)
+		if request.URL.Path != conf.HerokuApplinkDataActionTargetAuthPath {
+			t.Errorf("Expected to request path '%s', got '%s'", conf.HerokuApplinkDataActionTargetAuthPath, request.URL.Path)
 		}
 
 		if request.Method != "POST" {
@@ -248,9 +249,9 @@ func Test_DataActionTargetAuth(t *testing.T) {
 	defer server.Close()
 
 	config := &conf.Config{
-		HerokuIntegrationUrl:                      server.URL,
-		HerokuInvocationToken:                     herokuInvocationToken,
-		HerokuIntegrationDataActionTargetAuthPath: conf.HerokuIntegrationDataActionTargetAuthPath,
+		HerokuApplinkUrl:                      server.URL,
+		HerokuInvocationToken:                 herokuInvocationToken,
+		HerokuApplinkDataActionTargetAuthPath: conf.HerokuApplinkDataActionTargetAuthPath,
 	}
 	requestHeader := &mesh.RequestHeader{
 		XRequestID:          MockRequestID,

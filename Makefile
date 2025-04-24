@@ -15,7 +15,7 @@ help: ## show this
 	@grep -E '^[ a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: | fmt vet test bin/heroku-integration-service-mesh
+build: | fmt vet test bin/heroku-applink-service-mesh
 	$(info $(M) done)
 
 .PHONY: lint
@@ -38,7 +38,7 @@ test-coverage: ## run all of the test cases with code coverage
 .PHONY: test-fmt
 test-fmt: ## run all of the test cases with formatting (requires https://github.com/GoTestTools/gotestfmt)
 	$(info $(M) test-fmt …)
-	$(Q) go test -json -v ./test/** 2>&1 | tee /tmp/heroku-integration-service-mesh-gotestfmt.log | gotestfmt
+	$(Q) go test -json -v ./test/** 2>&1 | tee /tmp/heroku-applink-service-mesh-gotestfmt.log | gotestfmt
 
 .PHONY: fmt
 fmt: ## run go fmt on all source files
@@ -57,11 +57,11 @@ generate: ## run go generate
 
 bin/%: $(SRC_FILES)
 	$(info $(M) building $@ …)
-	$(Q) $(CC) -o $@ github.com/heroku/heroku-integration-service-mesh
+	$(Q) $(CC) -o $@ github.com/heroku/heroku-applink-service-mesh
 
 tar-gz: | build ## build and tar the binary
-	$(info $(M) tar heroku-integration-service-mesh ...)
-	$(Q) tar -zcvf heroku-integration-service-mesh.tar.gz -C bin heroku-integration-service-mesh
+	$(info $(M) tar heroku-applink-service-mesh ...)
+	$(Q) tar -zcvf heroku-applink-service-mesh.tar.gz -C bin heroku-applink-service-mesh
 
 release: ## create release tag and push to github to trigger release. Specify VERSION=vX.Y.Z and SHA=abcd123
 	@if [ -z "$(VERSION)" ]; then \

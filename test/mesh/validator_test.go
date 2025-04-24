@@ -1,11 +1,12 @@
 package mesh
 
 import (
-	"github.com/google/uuid"
 	"net/http"
 	"testing"
 
-	"github.com/heroku/heroku-integration-service-mesh/mesh"
+	"github.com/google/uuid"
+
+	"github.com/heroku/heroku-applink-service-mesh/mesh"
 )
 
 func Test_ValidateRequest_Success(t *testing.T) {

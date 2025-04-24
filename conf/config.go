@@ -10,14 +10,14 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// Heroku Integration authentication API paths
+// Heroku AppLink authentication API paths
 const (
-	AppPort                                   = "3000"
-	AppHost                                   = "http://127.0.0.1"
-	HealthCheckRoute                          = "/healthcheck"
-	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
-	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
-	YamlFileName                              = "heroku-integration-service-mesh.yaml"
+	AppPort                               = "3000"
+	AppHost                               = "http://127.0.0.1"
+	HealthCheckRoute                      = "/healthcheck"
+	HerokuApplinkSalesforceAuthPath       = "/invocations/authentication"
+	HerokuApplinkDataActionTargetAuthPath = "/data_action_targets/authenticate"
+	YamlFileName                          = "heroku-applink-service-mesh.yaml"
 )
 
 type Authentication struct {
@@ -45,15 +45,15 @@ type YamlConfig struct {
 }
 
 type Config struct {
-	HerokuInvocationToken                     string
-	HerokuIntegrationUrl                      string
-	HerokuInvocationSalesforceAuthPath        string
-	HerokuIntegrationDataActionTargetAuthPath string
-	PrivatePort                               string
-	PublicPort                                string
-	ShouldBypassAllRoutes                     bool
-	Version                                   string
-	YamlConfig                                *YamlConfig
+	HerokuInvocationToken                 string
+	HerokuApplinkUrl                      string
+	HerokuApplinkSalesforceAuthPath       string
+	HerokuApplinkDataActionTargetAuthPath string
+	PrivatePort                           string
+	PublicPort                            string
+	ShouldBypassAllRoutes                 bool
+	Version                               string
+	YamlConfig                            *YamlConfig
 }
 
 func (c *Config) Flags() []cli.Flag {
@@ -73,13 +73,13 @@ func (c *Config) Flags() []cli.Flag {
 var defaultConfig = sync.OnceValue(func() *Config {
 
 	// Get env config
-	herokuIntegrationToken := os.Getenv("HEROKU_INTEGRATION_TOKEN")
-	herokuIntegrationUrl := os.Getenv("HEROKU_INTEGRATION_API_URL")
-	shouldBypassAllRoutesConfigVar := os.Getenv("HEROKU_INTEGRATION_SERVICE_MESH_BYPASS_ALL_ROUTES")
+	herokuApplinkToken := os.Getenv("HEROKU_APPLINK_TOKEN")
+	herokuApplinkUrl := os.Getenv("HEROKU_APPLINK_API_URL")
+	shouldBypassAllRoutesConfigVar := os.Getenv("HEROKU_APPLINK_SERVICE_MESH_BYPASS_ALL_ROUTES")
 	shouldBypassAllRoutes, _ := strconv.ParseBool(shouldBypassAllRoutesConfigVar)
 
-	if herokuIntegrationUrl == "" || herokuIntegrationToken == "" {
-		log.Fatal("Heroku Integration add-on config vars not set")
+	if herokuApplinkUrl == "" || herokuApplinkToken == "" {
+		log.Fatal("Heroku AppLink add-on config vars not set")
 	}
 
 	yamlConfig, err := InitYamlConfig(YamlFileName)
@@ -88,15 +88,15 @@ var defaultConfig = sync.OnceValue(func() *Config {
 	}
 
 	return &Config{
-		HerokuInvocationToken:                     herokuIntegrationToken,
-		HerokuIntegrationUrl:                      herokuIntegrationUrl,
-		HerokuInvocationSalesforceAuthPath:        HerokuIntegrationSalesforceAuthPath,
-		HerokuIntegrationDataActionTargetAuthPath: HerokuIntegrationDataActionTargetAuthPath,
-		PrivatePort:           "8071",
-		PublicPort:            "8070",
-		ShouldBypassAllRoutes: shouldBypassAllRoutes,
-		Version:               VERSION,
-		YamlConfig:            yamlConfig,
+		HerokuInvocationToken:                 herokuApplinkToken,
+		HerokuApplinkUrl:                      herokuApplinkUrl,
+		HerokuApplinkSalesforceAuthPath:       HerokuApplinkSalesforceAuthPath,
+		HerokuApplinkDataActionTargetAuthPath: HerokuApplinkDataActionTargetAuthPath,
+		PrivatePort:                           "8071",
+		PublicPort:                            "8070",
+		ShouldBypassAllRoutes:                 shouldBypassAllRoutes,
+		Version:                               VERSION,
+		YamlConfig:                            yamlConfig,
 	}
 })
 

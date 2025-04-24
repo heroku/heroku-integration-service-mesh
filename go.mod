@@ -1,4 +1,4 @@
-module github.com/heroku/heroku-integration-service-mesh
+module github.com/heroku/heroku-applink-service-mesh
 
 go 1.22.1
 
