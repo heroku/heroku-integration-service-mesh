@@ -185,6 +185,7 @@ func Test_SalesforceAuth(t *testing.T) {
 			OrgID:        MockOrgID18,
 			Resource:     "resource",
 			Type:         "type",
+			AppUUID:      MockUUID,
 		},
 		XClientContext:      MockRequestID,
 		IsSalesforceRequest: true,

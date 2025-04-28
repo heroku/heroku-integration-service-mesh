@@ -19,6 +19,7 @@ var MockValidXRequestContext = &mesh.XRequestContext{
 	OrgID:        MockOrgID18,
 	Resource:     "resource",
 	Type:         "type",
+	AppUUID:      MockUUID,
 }
 
 func ConvertContextToString(context *mesh.XRequestContext) string {
