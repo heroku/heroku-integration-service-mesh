@@ -300,8 +300,8 @@ func InvokeHerokuApplinkService(
 	statusCode := http.StatusInternalServerError
 	body := ""
 
-	integrationApiUrl := config.HerokuApplinkUrl + apiPath
-	req, err := http.NewRequest(httpMethod, integrationApiUrl, bytes.NewBuffer(jsonBody))
+	applinkApiUrl := config.HerokuApplinkUrl + apiPath
+	req, err := http.NewRequest(httpMethod, applinkApiUrl, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		LogError(requestID, fmt.Sprintf("Failed to assemble %s request: %v", operation, err))
 		return statusCode, body, fmt.Errorf("unable to assemble %s request %s: %v", operation, requestID, err)
@@ -313,7 +313,7 @@ func InvokeHerokuApplinkService(
 
 	// TODO: Remove when no longer needed
 	LogDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Heroku AppLink API %s [%s] with body %s",
-		integrationApiUrl, config.HerokuInvocationToken, jsonBody))
+		applinkApiUrl, config.HerokuInvocationToken, jsonBody))
 
 	// Invoke
 	client := &http.Client{}

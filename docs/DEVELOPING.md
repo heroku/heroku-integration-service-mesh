@@ -39,7 +39,7 @@ $ GO_LOG=debug...
 
 ```shell
 $ pwd
-/home/cwall/git/heroku-sf-integration-nodejs
+/home/cwall/git/heroku-sf-AppLink-nodejs
 
 $ HEROKU_APPLINK_TOKEN=TOKEN HEROKU_APPLINK_API_URL=http://localhost:3000 APP_PORT=8080 /home/cwall/git/heroku-applink-service-mesh/bin/heroku-applink-service-mesh npm start
 time=2024-09-30T15:41:57.421-06:00 level=INFO msg=environment app=local source=heroku-applink-service-mesh go_version:=go1.22.1 os=linux arch=amd64 http_port=8070 version=v0.12.1 environment=local app_port=8080

@@ -17,9 +17,9 @@ The Heroku AppLink Service Mesh provides the following capabilities:
 - **App startup and health:** With a provided app startup command, the service mesh ensures that the app is running
   and healthy.
 - **Authentication**: Only connected clients can only invoke a target service mesh managed app. Each app is
-  connected to a Salesforce or Data Cloud org by a developer or admin via the Heroku Integration CLI plugin. Each
-  request travels with a secure identity that is then validated and authenticated by the Heroku Integration Service
-  Mesh and Heroku Integration add-on.
+  connected to a Salesforce or Data Cloud org by a developer or admin via the Heroku AppLink CLI plugin. Each
+  request travels with a secure identity that is then validated and authenticated by the Heroku AppLink Service
+  Mesh and Heroku AppLink add-on.
 - **Metrics:** The service mesh captures request metrics.
 
 ## Developing
