@@ -24,6 +24,7 @@ type SalesforceAuthRequestBody struct {
 	OrgDomainUrl string `json:"org_domain_url"`
 	CoreJWTToken string `json:"core_jwt_token"`
 	OrgID        string `json:"org_id"`
+	AppUUID      string `json:"app_uuid"`
 }
 
 type DataActionTargetAuthRequestBody struct {
@@ -200,6 +201,7 @@ func AuthenticateRequest(
 			OrgDomainUrl: requestHeader.XRequestContext.OrgDomainUrl,
 			CoreJWTToken: requestHeader.XRequestContext.Auth,
 			OrgID:        requestHeader.XRequestContext.OrgID,
+			AppUUID:      requestHeader.XRequestContext.AppUUID,
 		}
 
 		// FIXME: Remove when no longer needed
