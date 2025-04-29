@@ -15,6 +15,22 @@ import (
 	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )
 
+func Test_NewRoutes(t *testing.T) {
+	// Create new routes
+	routes := mesh.NewRoutes()
+
+	// Verify routes is not nil
+	if routes == nil {
+		t.Error("Expected NewRoutes to return non-nil Routes struct")
+	}
+
+	// Verify the routes instance can be used (indirect way to verify it's properly constructed)
+	handler := routes.ServiceMesh()
+	if handler == nil {
+		t.Error("Expected Routes to provide a valid ServiceMesh handler")
+	}
+}
+
 func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 	config := &conf.Config{
 		ShouldBypassAllRoutes: true,

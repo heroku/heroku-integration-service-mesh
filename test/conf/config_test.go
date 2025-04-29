@@ -25,6 +25,34 @@ func Test_GetConfigDefaults(t *testing.T) {
 	validateYamlConfigDefaults(t, config.YamlConfig)
 }
 
+func Test_GetConfigWithYaml(t *testing.T) {
+	t.Setenv("HEROKU_INTEGRATION_TOKEN", "HEROKU_INTEGRATION_TOKEN")
+	t.Setenv("HEROKU_INTEGRATION_API_URL", "HEROKU_INTEGRATION_API_URL")
+
+	config := conf.GetConfigWithYamlFile()
+
+	if config.Version == "" {
+		t.Error("Should have Version")
+	}
+
+	if config.PublicPort == "" {
+		t.Error("Should have PublicPort")
+	}
+
+	validateYamlConfigDefaults(t, config.YamlConfig)
+}
+
+func Test_Flags(t *testing.T) {
+	config := conf.GetConfig()
+	flags := config.Flags()
+	if len(flags) == 0 {
+		t.Error("Should have flags")
+	}
+	if len(flags) != 1 {
+		t.Errorf("Should have 1 string flags, but got %d", len(flags))
+	}
+}
+
 func Test_InitYamlConfig(t *testing.T) {
 	yamlConfig, err := conf.InitYamlConfig(conf.YamlFileName)
 
