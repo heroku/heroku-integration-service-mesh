@@ -18,7 +18,7 @@ const (
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
 	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
 	YamlFileName                              = "heroku-integration-service-mesh.yaml"
-	AddonAuthUrlFormat                        = "https://applink.heroku.com/addons/%s/connections/salesforce"
+	AddonAuthUrlFormat                        = "heroku.com/addons/%s/connections/salesforce"
 )
 
 type Authentication struct {
