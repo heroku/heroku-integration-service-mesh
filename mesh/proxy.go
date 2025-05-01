@@ -2,10 +2,12 @@ package mesh
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -100,6 +102,27 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 			return
 		}
 
+		// Get Addon UUID from request context
+		addonUUID, err := GetAddonUUIDFromRequestContext(requestID, incomingReq)
+		if err != nil {
+			LogError(requestID, "Failed to get Addon UUID from request context: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Get integration URL for the addon UUID
+		integrationUrl, err := GetIntegrationURLForAddonUUID(addonUUID)
+		if err != nil {
+			LogError(requestID, "Failed to get integration URL: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Update config with integration URL if not empty
+		if integrationUrl != "" {
+			config.HerokuIntegrationUrl = integrationUrl
+		}
+
 		// Validate and authenticate request, maybe
 		if !shouldBypassValidationAuthentication {
 			// Validate request headers
@@ -125,6 +148,11 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 
 		// Forward request to target API; send response to incoming request
 		forwardApiUrl, err := GetForwardUrl(config.YamlConfig.App.Host, config.YamlConfig.App.Port, incomingReq)
+		if err != nil {
+			LogError(requestID, "Failed to get forward URL: "+err.Error())
+			http.Error(incomingRespWriter, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		ForwardRequestReplyToIncomingRequest(startTime, requestID, forwardApiUrl, incomingRespWriter, incomingReq, incomingReqBody)
 	}
 }
@@ -175,6 +203,46 @@ func ValidateRequestHandler(requestID string, incomingRespWriter http.ResponseWr
 	}
 
 	return true, requestHeader
+}
+
+// GetIntegrationURLForAddonUUID Get integration URL for Addon UUID
+func GetIntegrationURLForAddonUUID(addonUUID string) (string, error) {
+	// Traverse environment variables looking for a matching addon URL
+	for _, envValue := range os.Environ() {
+		// Look for URLs containing the addon UUID in the expected format
+		if strings.Contains(envValue, fmt.Sprintf(conf.AddonConnectionUrlFormat, addonUUID)) {
+			// Split on = to get the actual URL value
+			parts := strings.SplitN(envValue, "=", 2)
+			if len(parts) == 2 {
+				return parts[1], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("No integration URL found for addon UUID: %s", addonUUID)
+}
+
+// GetAddonUUIDFromRequestContext Get Addon UUID from request context
+func GetAddonUUIDFromRequestContext(requestID string, incomingReq *http.Request) (string, error) {
+	// Get Addon ID from header; fail if not found
+	xRequestContextString := incomingReq.Header.Get(HdrRequestContext)
+	xRequestContext, err := base64.StdEncoding.DecodeString(xRequestContextString)
+	if err != nil {
+		LogError(requestID, "Failed to decode "+HdrRequestContext+" header: "+err.Error())
+		return "", err
+	}
+
+	var contextData XRequestContext
+	if err := json.Unmarshal(xRequestContext, &contextData); err != nil {
+		LogError(requestID, "Failed to unmarshal "+HdrRequestContext+" header: "+err.Error())
+		return "", err
+	}
+
+	if contextData.AddonUUID == "" {
+		LogError(requestID, "Addon UUID not found in "+xRequestContextString+" header")
+		return "", fmt.Errorf("Addon UUID not found in " + xRequestContextString + " header")
+	}
+
+	return contextData.AddonUUID, nil
 }
 
 // AuthenticateRequest Authenticate request based on request type - Salesforce or Data Action Target

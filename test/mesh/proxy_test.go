@@ -2,11 +2,13 @@ package mesh
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -371,5 +373,191 @@ func Test_ForwardRequestToUnavailableService(t *testing.T) {
 	responseStatus := incomingRespWriter.Result().StatusCode
 	if responseStatus != http.StatusBadGateway {
 		t.Fatal(fmt.Errorf("unexpected response for an invalid forward URL. Expected: %d, actual %d", http.StatusBadGateway, responseStatus))
+	}
+}
+
+func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
+	// Set up test environment variables
+	originalEnv := os.Environ()
+	defer func() {
+		// Restore original environment
+		os.Clearenv()
+		for _, env := range originalEnv {
+			parts := strings.SplitN(env, "=", 2)
+			if len(parts) == 2 {
+				os.Setenv(parts[0], parts[1])
+			}
+		}
+	}()
+
+	expectedURL := "https://applink.heroku.com/addons/" + MockUUID + "/connections/salesforce"
+
+	testCases := []struct {
+		name          string
+		envVars       map[string]string
+		expectedURL   string
+		expectedError bool
+	}{
+		{
+			name:          "No matching environment variable",
+			envVars:       map[string]string{},
+			expectedURL:   "",
+			expectedError: true,
+		},
+		{
+			name: "Matching environment variable exists",
+			envVars: map[string]string{
+				"HEROKU_INTEGRATION_URL": expectedURL,
+			},
+			expectedURL:   expectedURL,
+			expectedError: false,
+		},
+		{
+			name: "Multiple environment variables, one matching",
+			envVars: map[string]string{
+				"OTHER_VAR":              "some value",
+				"HEROKU_INTEGRATION_URL": expectedURL,
+				"ANOTHER_VAR":            "another value",
+			},
+			expectedURL:   expectedURL,
+			expectedError: false,
+		},
+		{
+			name: "Environment variable with different name but correct URL format",
+			envVars: map[string]string{
+				"SOME_OTHER_VAR": expectedURL,
+			},
+			expectedURL:   expectedURL,
+			expectedError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Clear environment and set test variables
+			os.Clearenv()
+			for key, value := range tc.envVars {
+				os.Setenv(key, value)
+			}
+
+			// Run test
+			url, err := mesh.GetIntegrationURLForAddonUUID(MockUUID)
+
+			// Check error
+			if tc.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+
+			// Check URL
+			if url != tc.expectedURL {
+				t.Errorf("Expected URL %s, got %s", tc.expectedURL, url)
+			}
+		})
+	}
+}
+
+func Test_GetAddonUUIDFromRequestContext(t *testing.T) {
+	// Create base context data
+	baseContext := mesh.XRequestContext{
+		ID:           MockRequestID,
+		Auth:         "auth",
+		LoginUrl:     "http://login.salesforce.com",
+		OrgDomainUrl: "http://org.salesforce.com",
+		OrgID:        MockOrgID18,
+		Resource:     "resource",
+		Type:         "type",
+	}
+
+	testCases := []struct {
+		name          string
+		headerValue   string
+		contextData   *mesh.XRequestContext
+		expectedUUID  string
+		expectedError bool
+	}{
+		{
+			name:          "Missing header",
+			headerValue:   "",
+			contextData:   nil,
+			expectedUUID:  "",
+			expectedError: true,
+		},
+		{
+			name:          "Invalid base64 encoding",
+			headerValue:   "invalid-base64",
+			contextData:   nil,
+			expectedUUID:  "",
+			expectedError: true,
+		},
+		{
+			name:          "Invalid JSON",
+			headerValue:   base64.StdEncoding.EncodeToString([]byte("invalid-json")),
+			contextData:   nil,
+			expectedUUID:  "",
+			expectedError: true,
+		},
+		{
+			name:          "Missing AddonUUID",
+			headerValue:   "",
+			contextData:   &baseContext, // AddonUUID intentionally omitted
+			expectedUUID:  "",
+			expectedError: true,
+		},
+		{
+			name:        "Valid request",
+			headerValue: "",
+			contextData: func() *mesh.XRequestContext {
+				context := baseContext
+				context.AddonUUID = MockUUID
+				return &context
+			}(),
+			expectedUUID:  MockUUID,
+			expectedError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create request
+			req, err := http.NewRequest("GET", "/test", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Set header value
+			if tc.contextData != nil {
+				jsonData, err := json.Marshal(tc.contextData)
+				if err != nil {
+					t.Fatal(err)
+				}
+				tc.headerValue = base64.StdEncoding.EncodeToString(jsonData)
+			}
+			req.Header.Set(mesh.HdrRequestContext, tc.headerValue)
+
+			// Run test
+			uuid, err := mesh.GetAddonUUIDFromRequestContext(MockRequestID, req)
+
+			// Check error
+			if tc.expectedError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+
+			// Check UUID
+			if uuid != tc.expectedUUID {
+				t.Errorf("Expected UUID %s, got %s", tc.expectedUUID, uuid)
+			}
+		})
 	}
 }
