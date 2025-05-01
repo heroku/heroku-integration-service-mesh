@@ -106,7 +106,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		addonUUID, err := GetAddonUUIDFromRequestContext(requestID, incomingReq)
 		if err != nil {
 			LogError(requestID, "Failed to get Addon UUID from request context: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
+			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
 			return
 		}
 
@@ -114,7 +114,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 		integrationUrl, err := GetIntegrationURLForAddonUUID(addonUUID)
 		if err != nil {
 			LogError(requestID, "Failed to get integration URL: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusBadRequest)
+			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
 			return
 		}
 
@@ -209,16 +209,18 @@ func ValidateRequestHandler(requestID string, incomingRespWriter http.ResponseWr
 func GetIntegrationURLForAddonUUID(addonUUID string) (string, error) {
 	// Traverse environment variables looking for a matching addon URL
 	for _, envValue := range os.Environ() {
-		// Look for URLs containing the addon UUID in the expected format
-		if strings.Contains(envValue, fmt.Sprintf(conf.AddonConnectionUrlFormat, addonUUID)) {
-			// Split on = to get the actual URL value
-			parts := strings.SplitN(envValue, "=", 2)
-			if len(parts) == 2 {
-				return parts[1], nil
-			}
+		// Split on = to get key and value
+		parts := strings.SplitN(envValue, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		// Check if key contains "API_URL" and value contains the addon UUID in expected format
+		if strings.Contains(parts[0], "API_URL") && strings.Contains(parts[1], fmt.Sprintf(conf.AddonAuthUrlFormat, addonUUID)) {
+			return parts[1], nil
 		}
 	}
-	return "", fmt.Errorf("No integration URL found for addon UUID: %s", addonUUID)
+	return "", fmt.Errorf("no integration URL found for addon UUID: %s", addonUUID)
 }
 
 // GetAddonUUIDFromRequestContext Get Addon UUID from request context

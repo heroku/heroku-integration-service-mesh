@@ -407,7 +407,7 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 		{
 			name: "Matching environment variable exists",
 			envVars: map[string]string{
-				"HEROKU_INTEGRATION_URL": expectedURL,
+				"HEROKU_INTEGRATION_API_URL": expectedURL,
 			},
 			expectedURL:   expectedURL,
 			expectedError: false,
@@ -415,9 +415,9 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 		{
 			name: "Multiple environment variables, one matching",
 			envVars: map[string]string{
-				"OTHER_VAR":              "some value",
-				"HEROKU_INTEGRATION_URL": expectedURL,
-				"ANOTHER_VAR":            "another value",
+				"OTHER_VAR":                  "some value",
+				"HEROKU_INTEGRATION_API_URL": expectedURL,
+				"ANOTHER_VAR":                "another value",
 			},
 			expectedURL:   expectedURL,
 			expectedError: false,
@@ -425,7 +425,7 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 		{
 			name: "Environment variable with different name but correct URL format",
 			envVars: map[string]string{
-				"SOME_OTHER_VAR": expectedURL,
+				"SOME_OTHER_VAR_API_URL": expectedURL,
 			},
 			expectedURL:   expectedURL,
 			expectedError: false,
