@@ -54,6 +54,7 @@ type Config struct {
 	PublicPort                                string
 	ShouldBypassAllRoutes                     bool
 	Version                                   string
+	AddonAuthUrlFormat                        string
 	YamlConfig                                *YamlConfig
 }
 
@@ -97,6 +98,7 @@ var defaultConfig = sync.OnceValue(func() *Config {
 		PublicPort:            "8070",
 		ShouldBypassAllRoutes: shouldBypassAllRoutes,
 		Version:               VERSION,
+		AddonAuthUrlFormat:    AddonAuthUrlFormat,
 		YamlConfig:            yamlConfig,
 	}
 })

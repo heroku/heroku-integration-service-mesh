@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -102,27 +101,6 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 			return
 		}
 
-		// Get Addon UUID from request context
-		addonUUID, err := GetAddonUUIDFromRequestContext(requestID, incomingReq)
-		if err != nil {
-			LogError(requestID, "Failed to get Addon UUID from request context: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		// Get integration URL for the addon UUID
-		integrationUrl, err := GetIntegrationURLForAddonUUID(addonUUID)
-		if err != nil {
-			LogError(requestID, "Failed to get integration URL: "+err.Error())
-			http.Error(incomingRespWriter, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		// Update config with integration URL if not empty
-		if integrationUrl != "" {
-			config.HerokuIntegrationUrl = integrationUrl
-		}
-
 		// Validate and authenticate request, maybe
 		if !shouldBypassValidationAuthentication {
 			// Validate request headers
@@ -206,7 +184,12 @@ func ValidateRequestHandler(requestID string, incomingRespWriter http.ResponseWr
 }
 
 // GetIntegrationURLForAddonUUID Get integration URL for Addon UUID
-func GetIntegrationURLForAddonUUID(addonUUID string) (string, error) {
+func GetIntegrationURLForAddonUUID(addonUUID string, requestHeader *RequestHeader, addonAuthUrlFormat string) (string, error) {
+	// Only look up integration URL for Salesforce requests
+	if !requestHeader.IsSalesforceRequest {
+		return "", nil
+	}
+
 	// Traverse environment variables looking for a matching addon URL
 	for _, envValue := range os.Environ() {
 		// Split on = to get key and value
@@ -216,7 +199,7 @@ func GetIntegrationURLForAddonUUID(addonUUID string) (string, error) {
 		}
 
 		// Check if key contains "API_URL" and value contains the addon UUID in expected format
-		if strings.Contains(parts[0], "API_URL") && strings.Contains(parts[1], fmt.Sprintf(conf.AddonAuthUrlFormat, addonUUID)) {
+		if strings.Contains(parts[0], "API_URL") && strings.Contains(parts[1], fmt.Sprintf(addonAuthUrlFormat, addonUUID)) {
 			return parts[1], nil
 		}
 	}
@@ -224,27 +207,14 @@ func GetIntegrationURLForAddonUUID(addonUUID string) (string, error) {
 }
 
 // GetAddonUUIDFromRequestContext Get Addon UUID from request context
-func GetAddonUUIDFromRequestContext(requestID string, incomingReq *http.Request) (string, error) {
+func GetAddonUUIDFromRequestContext(requestID string, requestHeader *RequestHeader) (string, error) {
 	// Get Addon ID from header; fail if not found
-	xRequestContextString := incomingReq.Header.Get(HdrRequestContext)
-	xRequestContext, err := base64.StdEncoding.DecodeString(xRequestContextString)
-	if err != nil {
-		LogError(requestID, "Failed to decode "+HdrRequestContext+" header: "+err.Error())
-		return "", err
+	addonUUID := requestHeader.XRequestContext.AddonUUID
+	if addonUUID == "" {
+		return "", fmt.Errorf("addon UUID not found in " + HdrRequestContext + " header")
 	}
 
-	var contextData XRequestContext
-	if err := json.Unmarshal(xRequestContext, &contextData); err != nil {
-		LogError(requestID, "Failed to unmarshal "+HdrRequestContext+" header: "+err.Error())
-		return "", err
-	}
-
-	if contextData.AddonUUID == "" {
-		LogError(requestID, "Addon UUID not found in "+xRequestContextString+" header")
-		return "", fmt.Errorf("Addon UUID not found in " + xRequestContextString + " header")
-	}
-
-	return contextData.AddonUUID, nil
+	return addonUUID, nil
 }
 
 // AuthenticateRequest Authenticate request based on request type - Salesforce or Data Action Target
@@ -264,6 +234,25 @@ func AuthenticateRequest(
 
 	if requestHeader.IsSalesforceRequest {
 		LogInfo(requestID, "Found Salesforce request")
+
+		// Get Addon UUID from request context
+		addonUUID, err := GetAddonUUIDFromRequestContext(requestID, requestHeader)
+		if err != nil {
+			LogError(requestID, "Failed to get Addon UUID from request context: "+err.Error())
+			return false
+		}
+
+		// Get integration URL for the addon UUID
+		integrationUrl, err := GetIntegrationURLForAddonUUID(addonUUID, requestHeader, config.AddonAuthUrlFormat)
+		if err != nil {
+			LogError(requestID, "Failed to get integration URL: "+err.Error())
+			return false
+		}
+
+		// Update config with integration URL if not empty
+		if integrationUrl != "" {
+			config.HerokuIntegrationUrl = integrationUrl
+		}
 
 		orgId = requestHeader.XRequestContext.OrgID
 		unauthorizedMsg = "Org " + orgId + " not found or not connected to app"

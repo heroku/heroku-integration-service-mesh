@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -129,9 +128,10 @@ func Test_ShouldBypassValidationAuthentication(t *testing.T) {
 func Test_SalesforceAuth(t *testing.T) {
 	herokuInvocationToken := "HerokuInvocationToken"
 	auth := "auth"
+	addonUUID := MockUUID
 
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != conf.HerokuIntegrationSalesforceAuthPath {
+		if !strings.Contains(request.URL.Path, conf.HerokuIntegrationSalesforceAuthPath) {
 			t.Errorf("Expected to request path "+conf.HerokuIntegrationSalesforceAuthPath+", got '%s'", request.URL.Path)
 		}
 
@@ -172,11 +172,17 @@ func Test_SalesforceAuth(t *testing.T) {
 	}))
 	defer server.Close()
 
+	// Set up environment variable for integration URL
+	expectedURL := fmt.Sprintf("%s/addons/%s/connections/salesforce", server.URL, addonUUID)
+	t.Setenv("HEROKU_INTEGRATION_API_URL", expectedURL)
+
 	config := &conf.Config{
 		HerokuIntegrationUrl:               server.URL,
 		HerokuInvocationToken:              herokuInvocationToken,
 		HerokuInvocationSalesforceAuthPath: conf.HerokuIntegrationSalesforceAuthPath,
+		AddonAuthUrlFormat:                 server.URL + "/addons/%s/connections/salesforce",
 	}
+
 	requestHeader := &mesh.RequestHeader{
 		XRequestID: MockRequestID,
 		XRequestContext: mesh.XRequestContext{
@@ -188,6 +194,7 @@ func Test_SalesforceAuth(t *testing.T) {
 			Resource:     "resource",
 			Type:         "type",
 			AppUUID:      MockUUID,
+			AddonUUID:    addonUUID,
 		},
 		XClientContext:      MockRequestID,
 		IsSalesforceRequest: true,
@@ -393,42 +400,54 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 	expectedURL := "https://applink.heroku.com/addons/" + MockUUID + "/connections/salesforce"
 
 	testCases := []struct {
-		name          string
-		envVars       map[string]string
-		expectedURL   string
-		expectedError bool
+		name                string
+		envVars             map[string]string
+		expectedURL         string
+		expectedError       bool
+		isSalesforceRequest bool
 	}{
 		{
-			name:          "No matching environment variable",
-			envVars:       map[string]string{},
-			expectedURL:   "",
-			expectedError: true,
+			name:                "No matching environment variable - Salesforce request",
+			envVars:             map[string]string{},
+			expectedURL:         "",
+			expectedError:       true,
+			isSalesforceRequest: true,
 		},
 		{
-			name: "Matching environment variable exists",
+			name: "Matching environment variable exists - Salesforce request",
 			envVars: map[string]string{
 				"HEROKU_INTEGRATION_API_URL": expectedURL,
 			},
-			expectedURL:   expectedURL,
-			expectedError: false,
+			expectedURL:         expectedURL,
+			expectedError:       false,
+			isSalesforceRequest: true,
 		},
 		{
-			name: "Multiple environment variables, one matching",
+			name: "Multiple environment variables, one matching - Salesforce request",
 			envVars: map[string]string{
 				"OTHER_VAR":                  "some value",
 				"HEROKU_INTEGRATION_API_URL": expectedURL,
 				"ANOTHER_VAR":                "another value",
 			},
-			expectedURL:   expectedURL,
-			expectedError: false,
+			expectedURL:         expectedURL,
+			expectedError:       false,
+			isSalesforceRequest: true,
 		},
 		{
-			name: "Environment variable with different name but correct URL format",
+			name: "Environment variable with different name but correct URL format - Salesforce request",
 			envVars: map[string]string{
 				"SOME_OTHER_VAR_API_URL": expectedURL,
 			},
-			expectedURL:   expectedURL,
-			expectedError: false,
+			expectedURL:         expectedURL,
+			expectedError:       false,
+			isSalesforceRequest: true,
+		},
+		{
+			name:                "Non-Salesforce request should not look up URL",
+			envVars:             map[string]string{},
+			expectedURL:         "",
+			expectedError:       false,
+			isSalesforceRequest: false,
 		},
 	}
 
@@ -440,8 +459,13 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 				os.Setenv(key, value)
 			}
 
+			// Create request header
+			requestHeader := &mesh.RequestHeader{
+				IsSalesforceRequest: tc.isSalesforceRequest,
+			}
+
 			// Run test
-			url, err := mesh.GetIntegrationURLForAddonUUID(MockUUID)
+			url, err := mesh.GetIntegrationURLForAddonUUID(MockUUID, requestHeader, conf.AddonAuthUrlFormat)
 
 			// Check error
 			if tc.expectedError {
@@ -476,42 +500,18 @@ func Test_GetAddonUUIDFromRequestContext(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		headerValue   string
 		contextData   *mesh.XRequestContext
 		expectedUUID  string
 		expectedError bool
 	}{
 		{
-			name:          "Missing header",
-			headerValue:   "",
-			contextData:   nil,
-			expectedUUID:  "",
-			expectedError: true,
-		},
-		{
-			name:          "Invalid base64 encoding",
-			headerValue:   "invalid-base64",
-			contextData:   nil,
-			expectedUUID:  "",
-			expectedError: true,
-		},
-		{
-			name:          "Invalid JSON",
-			headerValue:   base64.StdEncoding.EncodeToString([]byte("invalid-json")),
-			contextData:   nil,
-			expectedUUID:  "",
-			expectedError: true,
-		},
-		{
 			name:          "Missing AddonUUID",
-			headerValue:   "",
 			contextData:   &baseContext, // AddonUUID intentionally omitted
 			expectedUUID:  "",
 			expectedError: true,
 		},
 		{
-			name:        "Valid request",
-			headerValue: "",
+			name: "Valid request",
 			contextData: func() *mesh.XRequestContext {
 				context := baseContext
 				context.AddonUUID = MockUUID
@@ -524,24 +524,14 @@ func Test_GetAddonUUIDFromRequestContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create request
-			req, err := http.NewRequest("GET", "/test", nil)
-			if err != nil {
-				t.Fatal(err)
+			// Create request header from test case data
+			requestHeader := &mesh.RequestHeader{
+				XRequestContext:     *tc.contextData,
+				IsSalesforceRequest: true,
 			}
-
-			// Set header value
-			if tc.contextData != nil {
-				jsonData, err := json.Marshal(tc.contextData)
-				if err != nil {
-					t.Fatal(err)
-				}
-				tc.headerValue = base64.StdEncoding.EncodeToString(jsonData)
-			}
-			req.Header.Set(mesh.HdrRequestContext, tc.headerValue)
 
 			// Run test
-			uuid, err := mesh.GetAddonUUIDFromRequestContext(MockRequestID, req)
+			uuid, err := mesh.GetAddonUUIDFromRequestContext(MockRequestID, requestHeader)
 
 			// Check error
 			if tc.expectedError {
