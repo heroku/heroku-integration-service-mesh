@@ -398,6 +398,7 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 	}()
 
 	expectedURL := "https://applink.heroku.com/addons/" + MockUUID + "/connections/salesforce"
+	stagingExpectedURL := "https://applink.staging.herokudev.com/addons/" + MockUUID + "/connections/salesforce"
 
 	testCases := []struct {
 		name                string
@@ -419,6 +420,15 @@ func Test_GetIntegrationURLForAddonUUID(t *testing.T) {
 				"HEROKU_INTEGRATION_API_URL": expectedURL,
 			},
 			expectedURL:         expectedURL,
+			expectedError:       false,
+			isSalesforceRequest: true,
+		},
+		{
+			name: "Matching environment variable exists for staging - Salesforce request",
+			envVars: map[string]string{
+				"HEROKU_INTEGRATION_API_URL": stagingExpectedURL,
+			},
+			expectedURL:         stagingExpectedURL,
 			expectedError:       false,
 			isSalesforceRequest: true,
 		},
