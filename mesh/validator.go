@@ -58,6 +58,7 @@ type XRequestContext struct {
 	Resource     string `json:"resource"`
 	Type         string `json:"type"`
 	AppUUID      string `json:"appUuid"`
+	AddonUUID    string `json:"addonUuid"`
 }
 
 type RequestHeader struct {
