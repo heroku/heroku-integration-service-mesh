@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/base64"
 	"encoding/json"
+
 	"github.com/google/uuid"
 
 	"github.com/heroku/heroku-integration-service-mesh/mesh"

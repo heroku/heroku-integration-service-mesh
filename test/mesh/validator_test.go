@@ -1,9 +1,10 @@
 package mesh
 
 import (
-	"github.com/google/uuid"
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )

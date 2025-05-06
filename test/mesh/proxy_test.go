@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/heroku/heroku-integration-service-mesh/conf"
 	"github.com/heroku/heroku-integration-service-mesh/mesh"
 )
@@ -28,6 +29,55 @@ func Test_NewRoutes(t *testing.T) {
 	handler := routes.ServiceMesh()
 	if handler == nil {
 		t.Error("Expected Routes to provide a valid ServiceMesh handler")
+	}
+}
+
+type testRouter struct {
+	chi.Router
+	path string
+}
+
+func (tr *testRouter) HandleFunc(pattern string, handler http.HandlerFunc) {
+	tr.path = pattern
+}
+
+func Test_InitializeRoutes(t *testing.T) {
+	r := &testRouter{}
+	mesh.InitializeRoutes(r)
+	if r.path != "/*" {
+		t.Errorf("want /*, got %s", r.path)
+	}
+}
+
+func Test_ValidateRequestHandler(t *testing.T) {
+	// Test valid request
+	validReq := httptest.NewRequest("POST", "/test", nil)
+	validReq.Header.Set(mesh.HdrNameRequestID, MockRequestID)
+	validReq.Header.Set(mesh.HdrSignature, "test-signature")
+
+	w := httptest.NewRecorder()
+	isValid, reqHeader := mesh.ValidateRequestHandler(MockRequestID, w, validReq)
+
+	if !isValid {
+		t.Error("Expected valid request to be valid")
+	}
+	if reqHeader == nil {
+		t.Error("Expected non-nil RequestHeader for valid request")
+	}
+
+	// Test invalid request (missing headers)
+	invalidReq := httptest.NewRequest("POST", "/test", nil)
+	w = httptest.NewRecorder()
+	isValid, reqHeader = mesh.ValidateRequestHandler(MockRequestID, w, invalidReq)
+
+	if isValid {
+		t.Error("Expected invalid request to be invalid")
+	}
+	if reqHeader != nil {
+		t.Error("Expected nil RequestHeader for invalid request")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status unauthorized, got %v", w.Code)
 	}
 }
 
