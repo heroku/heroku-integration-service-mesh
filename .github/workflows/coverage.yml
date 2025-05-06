@@ -1,0 +1,29 @@
+name: Coverage Threshold
+on:
+  workflow_dispatch:
+    inputs:
+      coverage_threshold:
+        description: 'Coverage threshold'
+        required: true
+        default: "80"
+      coverage:
+        description: 'Coverage'
+        required: true
+        default: "0"
+
+jobs:
+  coverage-threshold:
+    runs-on: sfdc-hk-ubuntu-latest
+    steps:
+    - name: Coverage Threshold
+      run: |
+        if (( $COVERAGE < $COVERAGE_THRESHOLD ))
+        then
+          echo "$COVERAGE is below threshold of $COVERAGE_THRESHOLD"
+          exit 1
+        fi
+        echo "$COVERAGE meets threshold of $COVERAGE_THRESHOLD"
+        exit 0
+      env:
+        COVERAGE_THRESHOLD: ${{ github.event.inputs.coverage_threshold }}
+        COVERAGE: ${{ github.event.inputs.coverage }}
