@@ -439,3 +439,50 @@ func Test_ForwardRequestToUnavailableService(t *testing.T) {
 		t.Fatal(fmt.Errorf("unexpected response for an invalid forward URL. Expected: %d, actual %d", http.StatusBadGateway, responseStatus))
 	}
 }
+
+func TestServiceMesh_InfoRoute(t *testing.T) {
+	// Set required environment variables
+	t.Setenv("HEROKU_INTEGRATION_TOKEN", "test-token")
+	t.Setenv("HEROKU_INTEGRATION_API_URL", "test-url")
+
+	// Create a test server to handle the forwarded request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("1.0.0"))
+	}))
+	defer server.Close()
+
+	// Get the server URL parts
+	urlParts := strings.Split(server.URL, ":")
+	host := urlParts[0] + ":" + urlParts[1]
+	port := urlParts[2]
+
+	// Create a test request to the info route
+	req := httptest.NewRequest("GET", "/info", nil)
+	w := httptest.NewRecorder()
+
+	// Get config with test values
+	config := conf.GetConfig()
+	config.Version = "1.0.0"
+	config.YamlConfig.Mesh.Authentication.BypassRoutes = []string{"/info"}
+	config.YamlConfig.App.Host = host
+	config.YamlConfig.App.Port = port
+
+	// Create routes
+	routes := mesh.NewRoutes()
+	handler := routes.ServiceMesh()
+
+	// Call the handler
+	handler.ServeHTTP(w, req)
+
+	// Check the response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+
+	// Check that the response body contains the version
+	expectedBody := "1.0.0"
+	if w.Body.String() != expectedBody {
+		t.Errorf("Expected body %q, got %q", expectedBody, w.Body.String())
+	}
+}
