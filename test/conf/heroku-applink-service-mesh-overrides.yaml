@@ -1,7 +1,8 @@
 mesh:
   authentication:
+    bypassRoutes: []
   healthcheck:
-    enable: false
+    enable: "false"
 app:
-  port: 3030
+  port: "3030"
   host: "https://mesh"

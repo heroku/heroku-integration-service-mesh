@@ -16,4 +16,4 @@ jobs:
       - name: Cut new Github Release
         uses: softprops/action-gh-release@v2
         with:
-          files: heroku-integration-service-mesh.tar.gz
+          files: heroku-applink-service-mesh.tar.gz

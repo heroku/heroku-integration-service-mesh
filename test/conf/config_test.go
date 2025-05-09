@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/heroku/heroku-integration-service-mesh/conf"
+	"github.com/heroku/heroku-applink-service-mesh/conf"
 )
 
 func Test_GetConfigDefaults(t *testing.T) {
-	t.Setenv("HEROKU_INTEGRATION_TOKEN", "HEROKU_INTEGRATION_TOKEN")
-	t.Setenv("HEROKU_INTEGRATION_API_URL", "HEROKU_INTEGRATION_API_URL")
+	t.Setenv("HEROKU_APPLINK_TOKEN", "HEROKU_APPLINK_TOKEN")
+	t.Setenv("HEROKU_APPLINK_API_URL", "HEROKU_APPLINK_API_URL")
 
 	config := conf.GetConfig()
 
@@ -69,7 +69,7 @@ func Test_YamlConfigFileDoesNotExist(t *testing.T) {
 }
 
 func Test_InvalidYamlConfig(t *testing.T) {
-	_, err := conf.InitYamlConfig("heroku-integration-service-mesh-invalid.yaml")
+	_, err := conf.InitYamlConfig("heroku-applink-service-mesh-invalid.yaml")
 
 	if err == nil {
 		t.Error("Should have invalid YAML error")
@@ -77,7 +77,7 @@ func Test_InvalidYamlConfig(t *testing.T) {
 }
 
 func Test_InitYamlConfigOverrides(t *testing.T) {
-	yamlConfig, err := conf.InitYamlConfig("heroku-integration-service-mesh-overrides.yaml")
+	yamlConfig, err := conf.InitYamlConfig("heroku-applink-service-mesh-overrides.yaml")
 
 	if err != nil {
 		t.Error(err)

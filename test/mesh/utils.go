@@ -3,9 +3,10 @@ package mesh
 import (
 	"encoding/base64"
 	"encoding/json"
+
 	"github.com/google/uuid"
 
-	"github.com/heroku/heroku-integration-service-mesh/mesh"
+	"github.com/heroku/heroku-applink-service-mesh/mesh"
 )
 
 var MockOrgID18 = "00Dxx0000000000EAA"

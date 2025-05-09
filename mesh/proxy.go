@@ -13,7 +13,7 @@ import (
 
 	chi "github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/heroku/heroku-integration-service-mesh/conf"
+	"github.com/heroku/heroku-applink-service-mesh/conf"
 )
 
 type Routes struct {
@@ -48,12 +48,12 @@ func GetForwardUrl(host string, port string, forwardApiPath *http.Request) (stri
 	return url, nil
 }
 
-// ServiceMesh intercepts Heroku Integration app API requests validating and authenticating
+// ServiceMesh intercepts Heroku AppLink app API requests validating and authenticating
 // each request based on type - Salesforce or Data Action Target.
 //
 // For validation rules, see ValidateRequest.
 //
-// Requests are authenticated with the app's associated Heroku Integration add-on
+// Requests are authenticated with the app's associated Heroku AppLink add-on
 // resource.
 //
 // If validation and authentication are successful, the mesh forwards the request
@@ -106,7 +106,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 			isValid, requestHeader := ValidateRequestHandler(requestID, incomingRespWriter, incomingReq)
 			if !isValid {
 				// Log time took to evaluate request
-				TimeTrack(requestID, startTime, "Heroku Integration Service Mesh")
+				TimeTrack(requestID, startTime, "Heroku AppLink Service Mesh")
 
 				// Not valid, do not forward request
 				return
@@ -116,7 +116,7 @@ func (routes *Routes) ServiceMesh() http.HandlerFunc {
 			isAuthenticated := AuthenticateRequest(requestID, config, requestHeader, incomingRespWriter, incomingReq, incomingReqBody)
 			if !isAuthenticated {
 				// Log time took to evaluate request
-				TimeTrack(requestID, startTime, "Heroku Integration Service Mesh")
+				TimeTrack(requestID, startTime, "Heroku AppLink Service Mesh")
 
 				// Not authorized, do not forward request
 				return
@@ -270,7 +270,7 @@ func InvokeSalesforceAuth(requestID string, config *conf.Config, sfAuthRequestBo
 
 	operation := "Salesforce authentication"
 	jsonBody, err := json.Marshal(sfAuthRequestBody)
-	statusCode, body, err := InvokeHerokuIntegrationService(requestID, config, operation, config.HerokuInvocationSalesforceAuthPath,
+	statusCode, body, err := InvokeHerokuApplinkService(requestID, config, operation, config.HerokuApplinkSalesforceAuthPath,
 		http.MethodPost, jsonBody)
 
 	return statusCode, body, err
@@ -283,14 +283,14 @@ func InvokeDataTargetActionAuth(requestID string, config *conf.Config, dataActio
 
 	operation := "Data Action Target authentication"
 	jsonBody, err := json.Marshal(dataActionTargetAuthRequestBody)
-	statusCode, body, err := InvokeHerokuIntegrationService(requestID, config, operation, config.HerokuIntegrationDataActionTargetAuthPath,
+	statusCode, body, err := InvokeHerokuApplinkService(requestID, config, operation, config.HerokuApplinkDataActionTargetAuthPath,
 		http.MethodPost, jsonBody)
 
 	return statusCode, body, err
 }
 
-// InvokeHerokuIntegrationService Invoke given Heroku Integration API with given request JSON body.
-func InvokeHerokuIntegrationService(
+// InvokeHerokuApplinkService Invoke given Heroku AppLink API with given request JSON body.
+func InvokeHerokuApplinkService(
 	requestID string,
 	config *conf.Config,
 	operation string,
@@ -302,8 +302,8 @@ func InvokeHerokuIntegrationService(
 	statusCode := http.StatusInternalServerError
 	body := ""
 
-	integrationApiUrl := config.HerokuIntegrationUrl + apiPath
-	req, err := http.NewRequest(httpMethod, integrationApiUrl, bytes.NewBuffer(jsonBody))
+	applinkApiUrl := config.HerokuApplinkUrl + apiPath
+	req, err := http.NewRequest(httpMethod, applinkApiUrl, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		LogError(requestID, fmt.Sprintf("Failed to assemble %s request: %v", operation, err))
 		return statusCode, body, fmt.Errorf("unable to assemble %s request %s: %v", operation, requestID, err)
@@ -314,8 +314,8 @@ func InvokeHerokuIntegrationService(
 	req.Header.Set("REQUEST_ID", requestID)
 
 	// TODO: Remove when no longer needed
-	LogDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Heroku Integration API %s [%s] with body %s",
-		integrationApiUrl, config.HerokuInvocationToken, jsonBody))
+	LogDebug(requestID, fmt.Sprintf("!! REMOVEME !! Calling Heroku AppLink API %s [%s] with body %s",
+		applinkApiUrl, config.HerokuInvocationToken, jsonBody))
 
 	// Invoke
 	client := &http.Client{}
@@ -353,7 +353,7 @@ func ForwardRequestReplyToIncomingRequest(
 	forwardResp := ForwardRequest(requestID, forwardApiUrl, incomingRespWriter, incomingReq, incomingReqBody)
 
 	// Log time took to evaluate request and forward to API
-	TimeTrack(requestID, startTime, "Heroku Integration Service Mesh")
+	TimeTrack(requestID, startTime, "Heroku AppLink Service Mesh")
 
 	// If the request failed to be forwarded to the application, the ForwardRequest function below
 	// will have already written the error to incomingRespWriter. In that scenario, forwardResp
