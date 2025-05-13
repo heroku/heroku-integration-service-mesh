@@ -3,6 +3,7 @@ package mesh
 import (
 	"encoding/base64"
 	"encoding/json"
+
 	"github.com/google/uuid"
 
 	"github.com/heroku/heroku-integration-service-mesh/mesh"
@@ -20,6 +21,7 @@ var MockValidXRequestContext = &mesh.XRequestContext{
 	Resource:     "resource",
 	Type:         "type",
 	AppUUID:      MockUUID,
+	AddonUUID:    MockUUID,
 }
 
 func ConvertContextToString(context *mesh.XRequestContext) string {

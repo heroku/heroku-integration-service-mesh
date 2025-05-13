@@ -18,6 +18,7 @@ const (
 	HerokuIntegrationSalesforceAuthPath       = "/invocations/authentication"
 	HerokuIntegrationDataActionTargetAuthPath = "/data_action_targets/authenticate"
 	YamlFileName                              = "heroku-integration-service-mesh.yaml"
+	AddonAuthUrlFormat                        = "/addons/%s/connections/salesforce"
 )
 
 type Authentication struct {
@@ -53,6 +54,7 @@ type Config struct {
 	PublicPort                                string
 	ShouldBypassAllRoutes                     bool
 	Version                                   string
+	AddonAuthUrlFormat                        string
 	YamlConfig                                *YamlConfig
 }
 
@@ -96,6 +98,7 @@ var defaultConfig = sync.OnceValue(func() *Config {
 		PublicPort:            "8070",
 		ShouldBypassAllRoutes: shouldBypassAllRoutes,
 		Version:               VERSION,
+		AddonAuthUrlFormat:    AddonAuthUrlFormat,
 		YamlConfig:            yamlConfig,
 	}
 })
